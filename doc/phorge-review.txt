@@ -1,0 +1,357 @@
+*phorge-review.txt*    Review Phorge/Phabricator revisions and local changes
+
+==============================================================================
+CONTENTS                                              *phorge-review-contents*
+
+  1. Introduction ........................... |phorge-review-introduction|
+  2. Requirements ........................... |phorge-review-requirements|
+  3. Setup .................................. |phorge-review-setup|
+  4. Options ................................ |phorge-review-options|
+  5. Commands ............................... |phorge-review-commands|
+  6. Keymaps ................................ |phorge-review-keymaps|
+  7. Panel .................................. |phorge-review-panel|
+  8. Workflow ............................... |phorge-review-workflow|
+  9. Highlights ............................. |phorge-review-highlights|
+ 10. Limitations ............................ |phorge-review-limitations|
+
+==============================================================================
+1. INTRODUCTION                                   *phorge-review-introduction*
+
+phorge-review.nvim reviews Phorge and Phabricator (Differential) revisions on
+the real files in your working tree, so LSP, Treesitter and your usual
+tooling keep working while you read a diff. Metadata, changed files and
+comments are fetched through Conduit; the diff itself is computed locally
+with git against the base commit recorded in the revision's diff.
+
+It can also review local changes without a server, for example code written
+by a coding agent, and copy your comments to the clipboard as a prompt. See
+|:Phab-local|.
+
+==============================================================================
+2. REQUIREMENTS                                   *phorge-review-requirements*
+
+- Neovim 0.10 or newer
+- `git` and `curl` on `$PATH`
+- For revision reviews, Conduit credentials (local reviews need none). By
+  default they are discovered like `arc` does it:
+  `phabricator.uri` from the nearest `.arcconfig` (searched upwards from the
+  current directory) and the matching host entry in `~/.arcrc`, created by
+  `arc install-certificate`. See |phorge-review-option-uri| and
+  |phorge-review-option-token| for overrides.
+- The revision's code in your working tree, either because you authored it
+  or via |:Phab-patch|.
+
+==============================================================================
+3. SETUP                                                 *phorge-review-setup*
+
+Calling `setup()` is optional. Pass only the options you want to change: >lua
+
+    require('phorge-review').setup({
+      diff_folds = false,
+      keymaps = { browse = false },
+    })
+<
+Settings take effect for the next review you open; keymaps are rebound
+immediately.
+
+==============================================================================
+4. OPTIONS                                             *phorge-review-options*
+
+Defaults: >lua
+
+    {
+      uri = nil,
+      token = nil,
+      arcrc = '~/.arcrc',
+      panel = {
+        width = 44,
+        tree = true,
+      },
+      diff_split = true,
+      diff_folds = true,
+      comment_width = 90,
+      comment_border = '┃ ',
+      signs = {
+        comment = '●',
+        draft = '○',
+        added = '▎',
+        changed = '▎',
+        deleted = '▁',
+      },
+      panel_timeline = 8,
+      keymaps = {
+        comment = '<leader>rc',
+        submit = '<leader>rs',
+        files = '<leader>rf',
+        toggle_comments = '<leader>rt',
+        browse = '<leader>rb',
+        next = ']r',
+        prev = '[r',
+      },
+    }
+<
+                                                    *phorge-review-option-uri*
+uri ~
+    Base URI of the Phabricator install, e.g.
+    `"https://phabricator.example.com/"`. A trailing `/api/` is tolerated.
+    Default `nil`: read `phabricator.uri` (or `conduit_uri`) from the nearest
+    `.arcconfig`.
+
+                                                  *phorge-review-option-token*
+token ~
+    Conduit API token. Default `nil`: use `$PHORGE_REVIEW_TOKEN` if set,
+    otherwise the token stored for `uri` in |phorge-review-option-arcrc|.
+
+                                                  *phorge-review-option-arcrc*
+arcrc ~
+    Path to the arcanist credentials file. Default `'~/.arcrc'`.
+
+                                            *phorge-review-option-panel.width*
+panel.width ~
+    Width in columns of the side panel. Default `44`.
+
+                                             *phorge-review-option-panel.tree*
+panel.tree ~
+    `true` (default): show changed files as a directory tree. Directories
+    containing a single subdirectory and no files are merged into one line
+    (`a/b/c/`). `<CR>` on a directory folds or unfolds it.
+    `false`: flat list of full paths.
+
+                                             *phorge-review-option-diff_split*
+diff_split ~
+    `true` (default): opening a file shows the base version in a vertical
+    split on the left, both windows in |diff-mode|; the right window is the
+    real file.
+    `false`: only the real file is opened and changed lines are marked in
+    the sign column and highlighted (|hl-PhorgeReviewAddedLine|,
+    |hl-PhorgeReviewChangedLine|, |hl-PhorgeReviewDeleted|).
+
+                                             *phorge-review-option-diff_folds*
+diff_folds ~
+    `true` (default): keep Neovim's diff folding, which collapses unchanged
+    regions (use |zR| / |zo| to open them).
+    `false`: disable folding in both diff windows.
+
+                                          *phorge-review-option-comment_width*
+comment_width ~
+    Maximum width in cells used when wrapping inline comment text rendered
+    below code lines. The window width is respected if smaller. Default `90`.
+
+                                         *phorge-review-option-comment_border*
+comment_border ~
+    Prefix drawn in front of each rendered comment line. Default `'┃ '`.
+
+                                                  *phorge-review-option-signs*
+signs ~
+    Sign column glyphs. `comment` marks a published thread, `draft` an
+    unsubmitted one; `added`, `changed` and `deleted` are used for change
+    marks when |phorge-review-option-diff_split| is `false`. Each must be one
+    or two cells wide.
+
+                                         *phorge-review-option-panel_timeline*
+panel_timeline ~
+    Number of most recent timeline entries (comments, accepts, updates)
+    shown at the bottom of the panel. The full timeline is in
+    |:Phab-description|. Default `8`.
+
+                                                *phorge-review-option-keymaps*
+keymaps ~
+    Global keys bound to the |phorge-review-plug| mappings. Set an individual
+    entry to `false` to leave that action unbound, or the whole table to
+    `false` to define no global keys. `comment` is bound in normal and
+    visual mode, the rest in normal mode.
+
+==============================================================================
+5. COMMANDS                                           *phorge-review-commands*
+
+                                                                       *:Phab*
+:Phab [{revision}]
+    Open the review for {revision}, given as `D123`, `123` or a revision
+    URL. Without an argument the revision is taken from the
+    `Differential Revision:` trailer of the `HEAD` commit. Opens the
+    |phorge-review-panel|; a review that is already open for a different
+    revision is closed first.
+
+                                                               *:Phab-comment*
+:[range]Phab comment
+    Start an inline comment on the current line or on [range] (use a
+    visual selection). Only works in a real file buffer inside the
+    repository, not in the base split. The comment is saved to Phabricator
+    as a private draft when the editor buffer is written (`:w` or
+    `<C-s>`); `q` discards it.
+
+    To reply to an existing thread, comment on its line: Conduit has no
+    reply parameter, so the new inline is created on the same line and
+    Phabricator shows it under the thread. The editor title indicates
+    whom you are replying to.
+
+                                                                *:Phab-submit*
+:Phab submit
+    Publish all pending drafts together with an overall message. The first
+    line of the editor selects the action: `comment`, `accept`,
+    `request-changes`, `resign` or `plan-changes`. Write the buffer to send.
+
+                                                           *:Phab-description*
+:Phab description
+    Show title, author, status, reviewers, summary, test plan and the full
+    timeline in a floating window.
+
+                                                                  *:Phab-next*
+                                                                  *:Phab-prev*
+:Phab next
+:Phab prev
+    Jump to the next / previous commented line in the current buffer.
+
+                                                       *:Phab-toggle-comments*
+:Phab toggle-comments
+    Hide or show rendered inline comments in all buffers. While hidden the
+    panel header says so.
+
+                                                                 *:Phab-files*
+:Phab files
+    Focus the panel, opening it if needed.
+
+                                                                *:Phab-browse*
+:Phab browse
+    Open the thread under the cursor in the browser (anchored to the inline
+    comment), or the revision page when the cursor is not on a thread. Use
+    this to mark threads done or to edit and delete drafts, which Conduit
+    does not support.
+
+                                                                  *:Phab-help*
+:Phab help
+    Show the currently configured global keys and the panel keys in a
+    floating window. Also `?` in the panel.
+
+                                                               *:Phab-refresh*
+:Phab refresh
+    Fetch the revision again and re-render everything.
+
+                                                                 *:Phab-patch*
+:Phab patch {revision}
+    Run `arc patch D{revision}` in a terminal split and open the review when
+    it exits successfully. Use this when reviewing someone else's revision.
+
+                                                                 *:Phab-local*
+:Phab local [{ref}]
+    Review the working tree, including uncommitted and untracked files,
+    against the branch base: the merge base of `HEAD` with `origin/HEAD`,
+    falling back to `origin/master`, `origin/main`, `master` and `main`.
+    With {ref}, diff against the merge base of `HEAD` with {ref} instead;
+    `:Phab local HEAD` shows only uncommitted changes. Phabricator is not
+    involved: drafts are kept in `stdpath('state')/phorge-review/` per
+    repository and branch, and |:Phab-submit| copies them, with an
+    optional overall message, to the `+` register as a prompt for a coding
+    agent such as Claude Code, then clears them. |:Phab-refresh| re-lists
+    the changed files.
+
+                                                                 *:Phab-close*
+:Phab close
+    Close the panel and diff split, and remove all marks.
+
+==============================================================================
+6. KEYMAPS                                             *phorge-review-keymaps*
+
+                                                          *phorge-review-plug*
+The following |<Plug>| mappings are always defined:
+
+  <Plug>(phorge-review-comment)   normal and visual: |:Phab-comment|
+  <Plug>(phorge-review-submit)    |:Phab-submit|
+  <Plug>(phorge-review-files)     |:Phab-files|
+  <Plug>(phorge-review-toggle-comments)  |:Phab-toggle-comments|
+  <Plug>(phorge-review-browse)    |:Phab-browse|
+  <Plug>(phorge-review-next)      |:Phab-next|
+  <Plug>(phorge-review-prev)      |:Phab-prev|
+
+By default they are bound to the keys listed under
+|phorge-review-option-keymaps|.
+
+Inside the comment and submit editors: `:w` / `<C-s>` sends, `q` cancels.
+
+==============================================================================
+7. PANEL                                                 *phorge-review-panel*
+
+The panel on the left shows, top to bottom: revision ID, status and author;
+title; reviewers (`✓` accepted, `✗` rejected, `!` blocking); base commit
+and diff ID; changed files; all inline threads; pending drafts; the recent
+timeline.
+
+File entries carry a status letter (`A`dded, `M`odified, `D`eleted,
+`R`enamed, `C`opied) followed by the number of published threads
+(|phorge-review-option-signs| `comment`) and drafts (`draft`).
+
+Keys in the panel:
+
+  <CR> / o   open file; fold / unfold directory; jump to thread
+  d          |:Phab-description|
+  s          |:Phab-submit|
+  t          |:Phab-toggle-comments|
+  R          |:Phab-refresh|
+  q          |:Phab-close|
+  ?          |:Phab-help|
+
+==============================================================================
+8. WORKFLOW                                           *phorge-review-workflow*
+
+Reviewing someone else's revision: >
+    :Phab patch D123
+<
+Reviewing your own branch: >
+    :Phab
+<
+Any other way of getting the revision's files into the working tree works
+too (`arc patch --nobranch`, fetching the author's branch); then run
+`:Phab D123`.
+
+Then: open files from the panel (`<CR>`), navigate with LSP as usual in the
+right-hand window, `zR` to open folded context, `]r` / `[r` to jump between
+existing threads, `<leader>rc` to comment or reply (saved as a draft on
+`:w`), `<leader>rs` to publish all drafts with an overall message and
+action, and `q` in the panel when done. Afterwards switch back to your
+branch and delete `arcpatch-D123`.
+
+Comments are anchored to the line in the current working tree. If a thread
+was written against an older diff of the revision it is shown at its
+original line number and tagged `(on diff N)`.
+
+==============================================================================
+9. HIGHLIGHTS                                       *phorge-review-highlights*
+
+All groups are defined with `default` links and can be overridden.
+
+  PhorgeReviewBorder        Comment       comment border prefix
+  PhorgeReviewAuthor        Title         comment author
+  PhorgeReviewMeta          Comment       dates, secondary text
+  PhorgeReviewComment       Normal        comment body
+  PhorgeReviewDraft         DiagnosticWarn  draft tag and sign
+  PhorgeReviewDone          DiagnosticOk  "done" tag, done threads in panel
+  PhorgeReviewStale         DiagnosticHint  "(on diff N)" tag
+  PhorgeReviewSign          DiagnosticInfo  published thread sign
+  PhorgeReviewRange         ColorColumn   lines a thread refers to
+  PhorgeReviewAdded         DiffAdd       added-line sign, `A` in panel
+  PhorgeReviewAddedLine     DiffAdd       added line (diff_split = false)
+  PhorgeReviewChanged       DiffChange    changed-line sign, `M` in panel
+  PhorgeReviewChangedLine   DiffChange    changed line (diff_split = false)
+  PhorgeReviewDeleted       DiffDelete    deletion sign, `D` in panel
+  PhorgeReviewTitle         Title         panel header
+  PhorgeReviewSection       Special       panel section headings
+  PhorgeReviewDir           Directory     directories in the panel tree
+
+*hl-PhorgeReviewAddedLine* *hl-PhorgeReviewChangedLine*
+*hl-PhorgeReviewDeleted*
+
+==============================================================================
+10. LIMITATIONS                                    *phorge-review-limitations*
+
+- Conduit does not expose which side of a diff an inline comment is on;
+  comments are anchored to the new side by line number.
+- Replies are posted as new inlines on the same line; Conduit has no reply
+  parameter.
+- Marking threads done and editing or deleting drafts is only possible in
+  the web UI (|:Phab-browse|). Draft bookkeeping is kept in
+  `stdpath('state')/phorge-review/`; drafts published elsewhere are detected
+  on refresh, drafts deleted in the web UI are not.
+- Local changes beyond the revision show up in the diff, since the diff is
+  computed against your working tree.
+
+vim:tw=78:ts=8:ft=help:norl:
