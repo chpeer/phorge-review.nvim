@@ -35,6 +35,26 @@ return {
     end,
   },
   {
+    'falls back to the next default branch when one has no common history',
+    function()
+      local dir = h.repo()
+      h.write(dir, 'a.txt', 'unrelated\n')
+      h.git(dir, 'add', '.')
+      h.git(dir, 'commit', '-qm', 'unrelated')
+      h.git(dir, 'checkout', '-q', '--orphan', 'main')
+      h.git(dir, 'rm', '-rqf', '.')
+      h.write(dir, 'a.txt', 'one\n')
+      h.git(dir, 'add', '.')
+      h.git(dir, 'commit', '-qm', 'base')
+      local base = h.git(dir, 'rev-parse', 'HEAD')
+      h.git(dir, 'checkout', '-qb', 'feature')
+      h.write(dir, 'a.txt', 'ONE\n')
+      vim.cmd.cd(dir)
+      vim.cmd('Phab local')
+      h.eq({ base = base, files = { { status = 'M', path = 'a.txt' } } }, { base = state.base, files = state.files })
+    end,
+  },
+  {
     'limits the review to uncommitted changes when given HEAD',
     function()
       h.feature_repo()
@@ -150,6 +170,61 @@ return {
       ui.open_file(state.file_set['a.txt'])
       comments.new_comment(1, 1)
       h.eq({ 'markdown', 0 }, { vim.bo.filetype, vim.bo.textwidth })
+    end,
+  },
+  {
+    'reopens a deleted file without a buffer name clash',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['d.txt'])
+      ui.open_file(state.file_set['d.txt'])
+      h.eq(
+        { name = 'phorge-review://base/d.txt', lines = { 'gone' } },
+        { name = vim.api.nvim_buf_get_name(0), lines = vim.api.nvim_buf_get_lines(0, 0, -1, false) }
+      )
+    end,
+  },
+  {
+    'puts the cursor on a change in the first line of the file',
+    function()
+      local dir = h.feature_repo()
+      h.write(dir, 'a.txt', 'ONE\ntwo\nthree\nFOUR\n')
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['a.txt'])
+      h.eq(1, vim.api.nvim_win_get_cursor(0)[1])
+    end,
+  },
+  {
+    'drops the diff split when its window is used to edit another file',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['a.txt'])
+      vim.cmd.edit('new.txt')
+      h.eq({ diff = false, windows = 2 }, { diff = vim.wo.diff, windows = #vim.api.nvim_tabpage_list_wins(0) })
+    end,
+  },
+  {
+    'renders the comments of a file once when opening it',
+    function()
+      h.feature_repo()
+      require('phorge-review').setup({ diff_split = false })
+      vim.cmd('Phab local')
+      local refreshed = {}
+      local refresh_buf = comments.refresh_buf
+      h.stub(comments, 'refresh_buf', function(buf)
+        table.insert(refreshed, buf)
+        refresh_buf(buf)
+      end)
+      ui.open_file(state.file_set['a.txt'])
+      local buf = vim.api.nvim_get_current_buf()
+      h.eq(
+        { buf },
+        vim.tbl_filter(function(b)
+          return b == buf
+        end, refreshed)
+      )
     end,
   },
   {

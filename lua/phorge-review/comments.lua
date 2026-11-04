@@ -228,6 +228,12 @@ function M.jump(direction)
   end
 end
 
+--- Whether revision `id` is still the open review, e.g. once a Conduit reply
+--- arrives: it may have been closed or replaced while waiting.
+local function is_current(id)
+  return state.active() and not state.model.is_local and state.model.id == id
+end
+
 --- Published thread in `path` whose range contains `row`, if any.
 local function thread_at(path, row)
   for _, t in ipairs(state.model.inlines[path] or {}) do
@@ -436,9 +442,10 @@ function M.new_comment(line1, line2)
       if state.model.is_local then
         return add_draft(nil)
       end
+      local id = state.model.id
       async.run(function()
         local err, res = async.await(conduit.call('differential.createinline', {
-          revisionID = state.model.id,
+          revisionID = id,
           filePath = path,
           isNewFile = true,
           lineNumber = line1,
@@ -449,7 +456,9 @@ function M.new_comment(line1, line2)
         if err then
           return util.notify(err, vim.log.levels.ERROR)
         end
-        add_draft(res and res.id)
+        if is_current(id) then
+          add_draft(res and res.id)
+        end
       end)
     end,
   })
@@ -543,9 +552,10 @@ function M.submit()
       if message == '' and legacy == 'comment' and pending == 0 then
         return util.notify('nothing to submit')
       end
+      local id = state.model.id
       async.run(function()
         local err = async.await(conduit.call('differential.createcomment', {
-          revision_id = state.model.id,
+          revision_id = id,
           message = message,
           action = legacy,
           attach_inlines = true,
@@ -553,9 +563,12 @@ function M.submit()
         if err then
           return util.notify(err, vim.log.levels.ERROR)
         end
+        util.notify(('submitted %s with %d inline%s'):format(action, pending, pending == 1 and '' or 's'))
+        if not is_current(id) then
+          return
+        end
         state.drafts = {}
         M.save_drafts()
-        util.notify(('submitted %s with %d inline%s'):format(action, pending, pending == 1 and '' or 's'))
         require('phorge-review').refresh()
       end)
     end,

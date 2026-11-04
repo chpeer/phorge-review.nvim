@@ -34,8 +34,10 @@ local CHANGE_STATUS = {
   [2] = 'M', -- change
   [3] = 'D', -- delete
   [4] = 'D', -- move away (old path of a rename)
+  [5] = 'M', -- copy away (source of a copy; still exists and may be edited)
   [6] = 'R', -- move here
   [7] = 'C', -- copy here
+  [8] = 'D', -- multicopy (source moved to several places; no longer exists)
 }
 
 local function latest_comment(t)

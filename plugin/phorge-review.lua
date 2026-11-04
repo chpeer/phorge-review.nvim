@@ -86,7 +86,11 @@ vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = set_highl
 vim.api.nvim_create_autocmd({ 'BufWinEnter', 'BufReadPost' }, {
   group = group,
   callback = function(ev)
-    if package.loaded['phorge-review.state'] and require('phorge-review.state').active() then
+    if
+      package.loaded['phorge-review.state']
+      and require('phorge-review.state').active()
+      and not require('phorge-review.ui').opening
+    then
       require('phorge-review.comments').refresh_buf(ev.buf)
     end
   end,

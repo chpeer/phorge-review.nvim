@@ -72,7 +72,8 @@ Run `:help phorge-review` for the full documentation.
 3. Press `<CR>` on a file. The base version opens on the left and your real file on the
    right, in diff mode. The right-hand side is a normal buffer, so `gd`, references and
    hover all work. Use `zR` to unfold unchanged code and `]r` / `[r` to jump between
-   comments.
+   comments. Opening another file in the right-hand window (`:e`, `gf`, a picker) closes
+   the base version.
 
 4. To comment, press `<leader>rc` on a line or a visual selection, write your comment and
    save with `:w`. It is stored as a private draft on the server. Commenting on a line

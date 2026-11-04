@@ -48,16 +48,26 @@ local NAME_STATUS = { A = 'A', M = 'M', T = 'M', D = 'D', R = 'R', C = 'C' }
 --- files, as `{ status, path, old_path }` sorted by path.
 function M.changed_files(root, base)
   local files = {}
-  for line in vim.gsplit(git(root, { 'diff', '--name-status', '-M', base }) or '', '\n', { trimempty = true }) do
-    local parts = vim.split(line, '\t', { plain = true })
-    local status = NAME_STATUS[parts[1]:sub(1, 1)]
+  -- NUL-separated output keeps unusual paths (non-ASCII, tabs, quotes) verbatim
+  -- instead of C-quoting them. Entries are `status, path` or, for renames and
+  -- copies, `status, old_path, path`.
+  local out = git(root, { 'diff', '--name-status', '-z', '-M', base }, { raw = true }) or ''
+  local fields = vim.split(out, '\0', { plain = true })
+  local i = 1
+  while i < #fields do
+    local status = NAME_STATUS[fields[i]:sub(1, 1)]
     if status == 'R' or status == 'C' then
-      files[#files + 1] = { status = status, path = parts[3], old_path = parts[2] }
-    elseif status then
-      files[#files + 1] = { status = status, path = parts[2] }
+      files[#files + 1] = { status = status, path = fields[i + 2], old_path = fields[i + 1] }
+      i = i + 3
+    else
+      if status then
+        files[#files + 1] = { status = status, path = fields[i + 1] }
+      end
+      i = i + 2
     end
   end
-  for path in vim.gsplit(git(root, { 'ls-files', '--others', '--exclude-standard' }) or '', '\n', { trimempty = true }) do
+  local others = git(root, { 'ls-files', '-z', '--others', '--exclude-standard' }, { raw = true }) or ''
+  for path in vim.gsplit(others, '\0', { plain = true, trimempty = true }) do
     files[#files + 1] = { status = 'A', path = path }
   end
   table.sort(files, function(a, b)
@@ -66,11 +76,14 @@ function M.changed_files(root, base)
   return files
 end
 
---- Whether any of `paths` differs between `base` and the working tree.
+--- Whether any of `paths` differs between `base` and the working tree or is
+--- untracked.
 function M.has_changes(root, base, paths)
-  local args = { 'diff', '--name-only', base, '--' }
-  vim.list_extend(args, paths)
-  return (git(root, args) or '') ~= ''
+  local diff = { 'diff', '--name-only', base, '--' }
+  local others = { 'ls-files', '--others', '--exclude-standard', '--' }
+  vim.list_extend(diff, paths)
+  vim.list_extend(others, paths)
+  return (git(root, diff) or '') ~= '' or (git(root, others) or '') ~= ''
 end
 
 --- Contents of `path` at `rev`, or nil if it does not exist there.
@@ -80,7 +93,8 @@ end
 
 --- Hunks of `path` between `base` and the working tree.
 function M.hunks(root, base, path)
-  local out = git(root, { 'diff', '-U0', base, '--', path }) or ''
+  -- A configured external diff tool or forced colour would break the parsing.
+  local out = git(root, { 'diff', '--no-ext-diff', '--no-color', '-U0', base, '--', path }) or ''
   local hunks = {}
   for os_, oc, ns_, nc in ('\n' .. out):gmatch('\n@@ %-(%d+),?(%d*) %+(%d+),?(%d*) @@') do
     hunks[#hunks + 1] = {

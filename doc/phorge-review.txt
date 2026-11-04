@@ -121,7 +121,8 @@ panel.tree ~
 diff_split ~
     `true` (default): opening a file shows the base version in a vertical
     split on the left, both windows in |diff-mode|; the right window is the
-    real file.
+    real file. Showing another buffer in the right window (|:edit|, |gf|, a
+    picker) closes the split.
     `false`: only the real file is opened and changed lines are marked in
     the sign column and highlighted (|hl-PhorgeReviewAddedLine|,
     |hl-PhorgeReviewChangedLine|, |hl-PhorgeReviewDeleted|).

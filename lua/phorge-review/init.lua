@@ -55,8 +55,10 @@ local function resolve_base(root, model)
     table.insert(refs, 1, model.onto)
   end
   for _, ref in ipairs(refs) do
-    if git.ref_exists(root, ref) then
-      return git.merge_base(root, ref)
+    -- A ref without common history has no merge base; try the next one.
+    local base = git.ref_exists(root, ref) and git.merge_base(root, ref)
+    if base then
+      return base
     end
   end
 end

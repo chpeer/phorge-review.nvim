@@ -406,7 +406,10 @@ local function main_win()
   return state.main_win
 end
 
+local diff_group = api.nvim_create_augroup('phorge-review.diff', { clear = true })
+
 local function close_base()
+  api.nvim_clear_autocmds({ group = diff_group })
   if win_valid(state.base_win) then
     api.nvim_win_close(state.base_win, true)
   end
@@ -416,9 +419,13 @@ local function close_base()
   state.base_win, state.base_buf = nil, nil
 end
 
-local function base_buffer(path, content)
+--- Shows the base version of `path` in `win`.
+local function base_buffer(win, path, content)
   local buf = api.nvim_create_buf(false, true)
   api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(content:gsub('\n$', ''), '\n', { plain = true }))
+  -- Show the buffer before naming it, so that a base buffer `win` showed
+  -- before (e.g. of the same deleted file) is wiped and its name is free.
+  api.nvim_win_set_buf(win, buf)
   api.nvim_buf_set_name(buf, ('phorge-review://base/%s'):format(path))
   vim.bo[buf].buftype = 'nofile'
   vim.bo[buf].bufhidden = 'wipe'
@@ -449,12 +456,19 @@ function M.open_file(file)
 
   if file.status == 'D' then
     if base_content then
-      api.nvim_win_set_buf(main, base_buffer(file.path, base_content))
+      base_buffer(main, file.path, base_content)
     end
     return
   end
 
-  vim.cmd.edit(vim.fn.fnameescape(vim.fs.joinpath(state.root, file.path)))
+  -- The BufReadPost/BufWinEnter autocommands would render the comments before
+  -- the split exists; the refresh_buf() at the end does it once instead.
+  M.opening = true
+  local ok, err = pcall(vim.cmd.edit, vim.fn.fnameescape(vim.fs.joinpath(state.root, file.path)))
+  M.opening = false
+  if not ok then
+    error(err, 0)
+  end
   local file_buf = api.nvim_get_current_buf()
   if
     not state.model.is_local
@@ -472,10 +486,9 @@ function M.open_file(file)
   end
 
   if config.options.diff_split and base_content then
-    local buf = base_buffer(file.old_path or file.path, base_content)
     vim.cmd('leftabove vsplit')
     local win = api.nvim_get_current_win()
-    api.nvim_win_set_buf(win, buf)
+    local buf = base_buffer(win, file.old_path or file.path, base_content)
     vim.cmd.diffthis()
     state.base_win, state.base_buf = win, buf
     api.nvim_set_current_win(main)
@@ -484,7 +497,22 @@ function M.open_file(file)
       vim.wo[win].foldenable = false
       vim.wo[main].foldenable = false
     end
-    vim.cmd('normal! gg]c')
+    -- `]c` moves to the next change after the cursor, skipping one on line 1.
+    vim.cmd('normal! gg')
+    if vim.fn.diff_hlID(1, 1) == 0 then
+      vim.cmd('normal! ]c')
+    end
+    -- 'diff' is window-local: once the main window shows another buffer (:e,
+    -- gf, a picker), drop the split so it is not diffed against this base.
+    api.nvim_create_autocmd('BufWinEnter', {
+      group = diff_group,
+      callback = function(ev)
+        if api.nvim_get_current_win() == main and ev.buf ~= file_buf then
+          close_base()
+          vim.cmd.diffoff()
+        end
+      end,
+    })
   end
   require('phorge-review.comments').refresh_buf(file_buf)
 end
