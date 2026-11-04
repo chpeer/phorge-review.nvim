@@ -184,7 +184,9 @@ function M.render_panel()
   local m = state.model
   local lines, items, hls = {}, {}, {}
   local function add(text, item, hl, col_end)
-    lines[#lines + 1] = text
+    -- Buffer lines cannot contain newlines, and server fields such as the
+    -- title may.
+    lines[#lines + 1] = (text:gsub('[\r\n]+', ' '))
     items[#lines] = item
     if hl then
       hls[#hls + 1] = { #lines, hl, col_end }
@@ -521,7 +523,7 @@ end
 
 local function description_lines(m)
   local lines = {
-    ('# D%d: %s'):format(m.id, m.title),
+    ('# D%d: %s'):format(m.id, (m.title:gsub('[\r\n]+', ' '))),
     '',
     ('%s · %s · %s'):format(m.author, m.status, m.uri or ''),
   }

@@ -125,6 +125,19 @@ end
 
 return {
   {
+    'shows a multi-line title on one line in the panel',
+    function()
+      h.stub(REVISION.fields, 'title', 'Shout the\nsecond line')
+      open_revision()
+      h.eq(
+        { 'D123 · Needs Review · alice', 'Shout the second line' },
+        vim.api.nvim_buf_get_lines(state.panel_buf, 0, 2, false)
+      )
+      ui.description()
+      h.eq({ '# D123: Shout the second line' }, vim.api.nvim_buf_get_lines(0, 0, 1, false))
+    end,
+  },
+  {
     'opens a revision with its files, reviewers, inline threads and timeline',
     function()
       local _, base = open_revision()
