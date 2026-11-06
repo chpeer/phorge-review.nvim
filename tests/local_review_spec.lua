@@ -241,4 +241,70 @@ return {
       h.eq({ 0, 1 }, rows)
     end,
   },
+  {
+    'steps through the files in panel order and wraps around',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['a.txt'])
+      ui.step_file(1)
+      h.eq('c.txt', state.current_file)
+      ui.step_file(-1)
+      ui.step_file(-1)
+      h.eq('new.txt', state.current_file)
+      ui.step_file(1)
+      h.eq('a.txt', state.current_file)
+    end,
+  },
+  {
+    'continues the comment keys in the next file with comments and wraps around',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      comment('a.txt', 2, 2, 'first')
+      comment('c.txt', 1, 1, 'second')
+      ui.open_file(state.file_set['a.txt'])
+      vim.api.nvim_win_set_cursor(0, { 1, 0 })
+      local function key(lhs)
+        vim.cmd('normal ' .. lhs)
+        return { state.current_file, vim.api.nvim_win_get_cursor(0)[1] }
+      end
+      h.eq({ 'a.txt', 2 }, key(']r'))
+      h.eq({ 'c.txt', 1 }, key(']r'))
+      h.eq({ 'a.txt', 2 }, key(']r'))
+      h.eq({ 'c.txt', 1 }, key('[r'))
+      h.eq({ 'a.txt', 2 }, key('[r'))
+    end,
+  },
+  {
+    'binds the file keys only in review buffers until the review closes',
+    function()
+      local function has_key(buf, lhs)
+        return vim.api.nvim_buf_call(buf, function()
+          return vim.fn.maparg(lhs, 'n') ~= ''
+        end)
+      end
+      h.feature_repo()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['a.txt'])
+      local first = vim.api.nvim_get_current_buf()
+      h.eq({ true, true }, { has_key(first, '<Tab>'), has_key(first, ']r') })
+      ui.open_file(state.file_set['c.txt'])
+      h.eq({ false, false }, { has_key(first, '<Tab>'), has_key(first, ']r') })
+      local other = vim.api.nvim_create_buf(true, false)
+      h.eq(
+        '',
+        vim.api.nvim_buf_call(other, function()
+          return vim.fn.maparg('<S-Tab>', 'n')
+        end)
+      )
+      vim.cmd('Phab close')
+      h.eq(
+        '',
+        vim.api.nvim_buf_call(vim.fn.bufnr('c.txt'), function()
+          return vim.fn.maparg('<Tab>', 'n')
+        end)
+      )
+    end,
+  },
 }

@@ -14,6 +14,8 @@ function M.reset()
   M.panel_win = nil
   M.panel_items = {}
   M.collapsed = {} -- directory path -> true when folded in the panel tree
+  M.current_file = nil -- path of the file open in the main window
+  M.file_key_bufs = {} -- buffers holding the buffer-local keys
   M.main_win = nil
   M.base_win = nil
   M.base_buf = nil

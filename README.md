@@ -131,6 +131,7 @@ The default branch is found automatically: `origin/HEAD`, then `origin/master`,
 | `:Phab next` / `:Phab prev` | Jump to the next / previous comment in the current file.                                                           |
 | `:Phab toggle-comments`     | Hide or show inline comments.                                                                                      |
 | `:Phab files`               | Focus the panel.                                                                                                   |
+| `:Phab next-file` / `:Phab prev-file` | Open the next / previous changed file in panel order, wrapping around. |
 | `:Phab description`         | Show the revision's summary, test plan and full timeline.                                                          |
 | `:Phab browse`              | Open the comment under the cursor, or the revision, in the browser.                                                |
 | `:Phab refresh`             | Reload the review.                                                                                                 |
@@ -145,7 +146,7 @@ Global keys:
 | ------------ | -------------------------------- |
 | `<leader>rc` | Comment on the line or selection |
 | `<leader>rs` | Submit                           |
-| `]r` / `[r`  | Next / previous comment          |
+| `]r` / `[r`  | Next / previous comment, across files |
 | `<leader>rf` | Focus the panel                  |
 | `<leader>rt` | Hide / show comments             |
 | `<leader>rb` | Open in the browser              |
@@ -163,7 +164,7 @@ In the panel:
 | `t`          | Hide / show comments                                     |
 | `R`          | Refresh                                                  |
 | `q`          | Close the review                                         |
-| `?`          | Help                                                     |
+| `g?`         | Help                                                     |
 
 In the comment and submit editors, `:w` or `<C-s>` sends and `q` cancels.
 
@@ -193,8 +194,10 @@ require('phorge-review').setup({
   },
   panel_timeline = 8,   -- number of recent activity entries in the panel
   keymaps = {           -- set a key to false to skip it, or keymaps = false for none
+    next_file = '<Tab>', prev_file = '<S-Tab>',  -- buffer-local to the panel and review files
     comment = '<leader>rc', submit = '<leader>rs', files = '<leader>rf',
-    toggle_comments = '<leader>rt', browse = '<leader>rb', next = ']r', prev = '[r',
+    toggle_comments = '<leader>rt', browse = '<leader>rb',
+    next = ']r', prev = '[r',  -- buffer-local to the panel and review files
   },
 })
 ```

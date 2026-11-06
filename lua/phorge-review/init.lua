@@ -61,7 +61,7 @@ function M.apply_keymaps()
     return
   end
   for name, lhs in pairs(keymaps) do
-    if lhs then
+    if lhs and not ui.BUFFER_KEYMAPS[name] then
       local mode = name == 'comment' and { 'n', 'x' } or 'n'
       local plug = ('<Plug>(phorge-review-%s)'):format(name:gsub('_', '-'))
       vim.keymap.set(mode, lhs, plug, { desc = 'phorge-review: ' .. name:gsub('_', ' ') })
@@ -338,6 +338,12 @@ local subcommands = {
   ['toggle-comments'] = comments.toggle_comments,
   description = ui.description,
   files = ui.open_panel,
+  ['next-file'] = function()
+    ui.step_file(1)
+  end,
+  ['prev-file'] = function()
+    ui.step_file(-1)
+  end,
   browse = comments.browse,
   help = ui.help,
   next = function()
