@@ -241,8 +241,8 @@ keymaps ~
 :Phab next-file
 :Phab prev-file
     Open the next / previous changed file in panel order, wrapping around.
-    Bound to `<Tab>` / `<S-Tab>` in the panel and in the review's file and base
-    buffers only; the keys are removed when the review closes.
+    Bound to `<Tab>` / `<S-Tab>` in the panel and in the review's file and
+    base buffers only; the keys are removed when the review closes.
 
                                                                 *:Phab-browse*
 :Phab browse

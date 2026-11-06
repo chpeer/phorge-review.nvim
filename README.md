@@ -30,8 +30,7 @@ Both modes share the same interface:
     with the `uri` option)
   - a Conduit API token, read from `~/.arcrc` as written by `arc install-certificate`
     (or set with the `token` option or `$PHORGE_REVIEW_TOKEN`)
-  - `arc`, if you want to use `:Phab patch`; a bare `:Phab` also asks `arc which` for the
-    revision of the current branch when it is available
+  - `arc`, if you want to use `:Phab patch`
 
 Local reviews need neither a server nor a token.
 
