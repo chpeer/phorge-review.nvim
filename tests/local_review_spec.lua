@@ -201,8 +201,46 @@ return {
       h.feature_repo()
       vim.cmd('Phab local')
       ui.open_file(state.file_set['a.txt'])
-      vim.cmd.edit('new.txt')
+      vim.cmd.edit(vim.fn.tempname())
+      h.wait(function()
+        return state.base_win == nil
+      end, 'the diff split to close')
       h.eq({ diff = false, windows = 2 }, { diff = vim.wo.diff, windows = #vim.api.nvim_tabpage_list_wins(0) })
+    end,
+  },
+  {
+    'restores the diff split when the file is shown again, keeping the cursor',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['a.txt'])
+      vim.api.nvim_win_set_cursor(0, { 3, 0 })
+      vim.cmd.edit(vim.fn.tempname())
+      vim.cmd.buffer('#')
+      h.wait(function()
+        return vim.wo.diff
+      end, 'the diff split to return')
+      h.eq({ windows = 3, base = 'phorge-review://base/a.txt', cursor = { 3, 0 } }, {
+        windows = #vim.api.nvim_tabpage_list_wins(0),
+        base = vim.api.nvim_buf_get_name(state.base_buf),
+        cursor = vim.api.nvim_win_get_cursor(0),
+      })
+    end,
+  },
+  {
+    'diffs another file of the review opened in the same window',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['a.txt'])
+      vim.cmd.edit('c.txt')
+      h.wait(function()
+        return vim.wo.diff
+      end, 'the diff split for c.txt')
+      h.eq({ windows = 3, base = 'phorge-review://base/b.txt' }, {
+        windows = #vim.api.nvim_tabpage_list_wins(0),
+        base = vim.api.nvim_buf_get_name(state.base_buf),
+      })
     end,
   },
   {
