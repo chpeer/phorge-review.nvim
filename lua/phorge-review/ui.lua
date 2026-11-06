@@ -421,14 +421,19 @@ local function close_base()
   state.base_win, state.base_buf = nil, nil
 end
 
---- Shows the base version of `path` in `win`.
-local function base_buffer(win, path, content)
+--- Shows `content`, the base version of `path` or, with `revision`, the
+--- revision's version, in `win`. A revision buffer stands in for the file of
+--- the same path: comments are placed on it.
+local function base_buffer(win, path, content, revision)
   local buf = api.nvim_create_buf(false, true)
   api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(content:gsub('\n$', ''), '\n', { plain = true }))
-  -- Show the buffer before naming it, so that a base buffer `win` showed
-  -- before (e.g. of the same deleted file) is wiped and its name is free.
+  if revision then
+    vim.b[buf].phorge_review_path = path
+  end
+  -- Show the buffer before naming it, so that a buffer `win` showed before
+  -- (e.g. of the same file) is wiped and its name is free.
   api.nvim_win_set_buf(win, buf)
-  api.nvim_buf_set_name(buf, ('phorge-review://base/%s'):format(path))
+  api.nvim_buf_set_name(buf, ('phorge-review://%s/%s'):format(revision and 'revision' or 'base', path))
   vim.bo[buf].buftype = 'nofile'
   vim.bo[buf].bufhidden = 'wipe'
   vim.bo[buf].swapfile = false
@@ -465,15 +470,24 @@ function M.open_file(file)
 
   -- The BufReadPost/BufWinEnter autocommands would render the comments before
   -- the split exists; the refresh_buf() at the end does it once instead.
+  local path = vim.fs.joinpath(state.root, file.path)
+  local tree_content = state.tree and git.show(state.root, state.tree, file.path)
+  local file_buf
   M.opening = true
-  local ok, err = pcall(vim.cmd.edit, vim.fn.fnameescape(vim.fs.joinpath(state.root, file.path)))
-  M.opening = false
-  if not ok then
-    error(err, 0)
+  if tree_content and tree_content ~= util.read_file(path) then
+    file_buf = base_buffer(main, file.path, tree_content, true)
+  else
+    local ok, err = pcall(vim.cmd.edit, vim.fn.fnameescape(path))
+    if not ok then
+      M.opening = false
+      error(err, 0)
+    end
+    file_buf = api.nvim_get_current_buf()
   end
-  local file_buf = api.nvim_get_current_buf()
+  M.opening = false
   if
     not state.model.is_local
+    and not state.tree
     and base_content
     and base_content == table.concat(api.nvim_buf_get_lines(file_buf, 0, -1, false), '\n') .. '\n'
   then

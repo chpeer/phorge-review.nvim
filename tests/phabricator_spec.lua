@@ -43,7 +43,7 @@ local TRANSACTIONS = {
 --- A repository whose `feature` branch carries the revision, a stubbed
 --- Conduit, and the review of D123 opened. `changes` overrides the changes
 --- of its diff. Returns the recorded Conduit calls and the base commit.
-local function open_revision(changes)
+local function open_revision(changes, raw_diff_of_base)
   local dir = h.repo()
   h.write(dir, 'a.txt', 'one\ntwo\nthree\n')
   h.git(dir, 'add', '.')
@@ -51,7 +51,13 @@ local function open_revision(changes)
   local base = h.git(dir, 'rev-parse', 'HEAD')
   h.git(dir, 'checkout', '-qb', 'feature')
   h.write(dir, 'a.txt', 'one\nTWO\nthree\n')
-  h.git(dir, 'commit', '-qam', 'shout')
+  h.git(dir, 'commit', '-qa', '-m', 'shout', '-m', 'Differential Revision: https://phorge.example.com/D123')
+  local raw_diff
+  if raw_diff_of_base then
+    -- The revision is only available as its raw diff; the working tree is at the base.
+    raw_diff = h.git(dir, 'diff', base, 'HEAD') .. '\n'
+    h.git(dir, 'checkout', '-q', 'master')
+  end
   vim.cmd.cd(dir)
 
   local responses = {
@@ -70,6 +76,7 @@ local function open_revision(changes)
     ['differential.querydiffs'] = { ['2'] = { changes = changes or { { type = 2, currentPath = 'a.txt' } } } },
     ['differential.createinline'] = { id = 55 },
     ['differential.createcomment'] = {},
+    ['differential.getrawdiff'] = raw_diff,
   }
   local calls = {}
   h.stub(require('phorge-review.conduit'), 'call', function(method, params)
@@ -78,7 +85,7 @@ local function open_revision(changes)
       cb(nil, responses[method])
     end
   end)
-  vim.cmd('Phab D123')
+  vim.cmd(raw_diff_of_base and 'Phab diff-only D123' or 'Phab D123')
   h.wait(state.active, 'the review to open')
   return calls, base
 end
@@ -153,6 +160,7 @@ return {
         uri = 'https://phorge.example.com/D123',
         reviewers = { { name = 'bob', status = 'accepted', blocking = false } },
         diff_id = 2,
+        diff_only = false,
         base = base,
         onto = 'master',
         files = { { status = 'M', path = 'a.txt' } },
@@ -265,6 +273,118 @@ return {
         { drafts = {}, notifications = {} },
         { drafts = state.drafts, notifications = vim.list_slice(h.notifications, seen + 1) }
       )
+    end,
+  },
+  {
+    'shows the revision from its raw diff without touching the working tree',
+    function()
+      local _, base = open_revision(nil, true)
+      local dir = vim.uv.cwd()
+      ui.open_file(state.file_set['a.txt'])
+      h.eq({ 'one', 'TWO', 'three' }, vim.api.nvim_buf_get_lines(0, 0, -1, false))
+      h.eq(true, vim.api.nvim_buf_get_name(0):match('^phorge%-review://revision/a%.txt$') ~= nil)
+      -- The inline thread on line 2 is placed on the revision's version.
+      local ns = vim.api.nvim_get_namespaces()['phorge-review.comments']
+      local threads = vim.tbl_filter(function(m)
+        return m[4].virt_lines ~= nil
+      end, vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true }))
+      h.eq(
+        { 1 },
+        vim.tbl_map(function(m)
+          return m[2]
+        end, threads)
+      )
+      comments.new_comment(2, 2)
+      h.submit_editor({ 'Why uppercase?' })
+      h.wait(function()
+        return state.drafts['a.txt'] ~= nil
+      end, 'the draft')
+      h.eq({ head = base, status = '', disk = 'one\ntwo\nthree\n' }, {
+        head = h.git(dir, 'rev-parse', 'HEAD'),
+        status = h.git(dir, 'status', '--short'),
+        disk = io.open(vim.fs.joinpath(dir, 'a.txt')):read('*a'),
+      })
+    end,
+  },
+  {
+    'fetches the raw diff of a diff only once',
+    function()
+      local calls = open_revision(nil, true)
+      local tree = state.tree
+      vim.cmd('Phab close')
+      vim.cmd('Phab diff-only D123')
+      h.wait(state.active, 'the review to reopen')
+      h.eq(1, #params_of(calls, 'differential.getrawdiff'))
+      h.eq(tree, state.tree)
+      h.eq({ diffID = 2 }, params_of(calls, 'differential.getrawdiff')[1])
+    end,
+  },
+  {
+    'does not ask about the diff only when the current branch is the revision',
+    function()
+      local asked = {}
+      h.stub(vim.ui, 'select', function(items)
+        table.insert(asked, items)
+      end)
+      open_revision()
+      h.eq({}, asked)
+      h.eq(nil, state.tree)
+    end,
+  },
+  {
+    'offers the diff only when the current branch is for another revision',
+    function()
+      open_revision(nil, true)
+      vim.cmd('Phab close')
+      h.stub(require('phorge-review.git'), 'branch_revision', function()
+        return 200
+      end)
+      local asked
+      h.stub(vim.ui, 'select', function(items, opts, on_choice)
+        asked = { items = items, prompt = opts.prompt }
+        on_choice(items[1])
+      end)
+      vim.cmd('Phab D123')
+      h.wait(state.active, 'the review to open')
+      h.eq({ 'Diff only (no checkout needed)', 'Working tree anyway' }, asked.items)
+      h.eq('The current branch is for D200, not D123. Review:', asked.prompt)
+      h.eq(true, state.tree ~= nil)
+    end,
+  },
+  {
+    'reviews the working tree when that is chosen over the diff only',
+    function()
+      open_revision(nil, true)
+      vim.cmd('Phab close')
+      h.stub(require('phorge-review.git'), 'branch_revision', function() end)
+      h.stub(vim.ui, 'select', function(items, opts, on_choice)
+        h.eq('The current branch is not for D123. Review:', opts.prompt)
+        on_choice(items[2])
+      end)
+      vim.cmd('Phab D123')
+      h.wait(state.active, 'the review to open')
+      h.eq(nil, state.tree)
+    end,
+  },
+  {
+    'opens nothing when the prompt is dismissed',
+    function()
+      open_revision(nil, true)
+      vim.cmd('Phab close')
+      h.stub(require('phorge-review.git'), 'branch_revision', function() end)
+      h.stub(vim.ui, 'select', function(_, _, on_choice)
+        on_choice(nil)
+      end)
+      vim.cmd('Phab D123')
+      h.eq(false, state.active())
+    end,
+  },
+  {
+    'opens the real file when the revision is in the working tree',
+    function()
+      open_revision()
+      ui.open_file(state.file_set['a.txt'])
+      h.eq(vim.fs.joinpath(vim.uv.cwd(), 'a.txt'), vim.api.nvim_buf_get_name(0))
     end,
   },
   {

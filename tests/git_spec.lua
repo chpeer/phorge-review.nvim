@@ -72,4 +72,37 @@ return {
       h.eq(h.git(dir, 'rev-parse', 'master'), git.merge_base(dir, 'master'))
     end,
   },
+  {
+    'finds the revision in a commit before the branch tip',
+    function()
+      local dir = h.repo()
+      h.write(dir, 'a.txt', 'one\n')
+      h.git(dir, 'add', '.')
+      h.git(dir, 'commit', '-qm', 'base', '-m', 'Differential Revision: https://phorge.example.com/D1')
+      h.git(dir, 'checkout', '-qb', 'feature')
+      h.write(dir, 'a.txt', 'two\n')
+      h.git(dir, 'commit', '-qam', 'change', '-m', 'Differential Revision: https://phorge.example.com/D2')
+      h.write(dir, 'a.txt', 'three\n')
+      h.git(dir, 'commit', '-qam', 'fixup')
+      h.write(dir, 'a.txt', 'four\n')
+      h.git(dir, 'commit', '-qam', 'another fixup')
+      h.eq(2, git.branch_revision(dir))
+    end,
+  },
+  {
+    'prefers the newest revision on the branch and falls back to HEAD on the default branch',
+    function()
+      local dir = h.repo()
+      h.write(dir, 'a.txt', 'one\n')
+      h.git(dir, 'add', '.')
+      h.git(dir, 'commit', '-qm', 'base', '-m', 'Differential Revision: https://phorge.example.com/D1')
+      h.eq(1, git.branch_revision(dir))
+      h.git(dir, 'checkout', '-qb', 'feature')
+      h.write(dir, 'a.txt', 'two\n')
+      h.git(dir, 'commit', '-qam', 'older', '-m', 'Differential Revision: https://phorge.example.com/D2')
+      h.write(dir, 'a.txt', 'three\n')
+      h.git(dir, 'commit', '-qam', 'newer', '-m', 'Differential Revision: https://phorge.example.com/D3')
+      h.eq(3, git.branch_revision(dir))
+    end,
+  },
 }

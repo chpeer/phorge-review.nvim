@@ -24,9 +24,17 @@ local ACTIONS = {
   ['plan-changes'] = 'rethink',
 }
 
---- Repository-relative path of `buf`, or nil if it is not a file in the repo.
+--- Repository-relative path of `buf`, or nil if it is neither a file in the
+--- repo nor the revision's version of one.
 function M.relpath(buf)
-  if not state.root or vim.bo[buf].buftype ~= '' then
+  if not state.root then
+    return nil
+  end
+  local revision_path = vim.b[buf].phorge_review_path
+  if revision_path then
+    return revision_path
+  end
+  if vim.bo[buf].buftype ~= '' then
     return nil
   end
   local name = api.nvim_buf_get_name(buf)
@@ -128,7 +136,7 @@ function M.highlight_changes(buf, path)
   end
   local signs = config.options.signs
   local n = api.nvim_buf_line_count(buf)
-  local hunks = git.hunks(state.root, state.base, path)
+  local hunks = git.hunks(state.root, state.base, path, state.tree)
   if #hunks == 0 and state.file_set[path].status == 'A' then
     -- Untracked files have no diff against the base.
     hunks = { { old_start = 0, old_count = 0, new_start = 1, new_count = n } }

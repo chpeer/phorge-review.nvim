@@ -5,6 +5,7 @@ function M.reset()
   M.model = nil -- see review.lua
   M.root = nil -- git repository root
   M.base = nil -- base commit the local changes are diffed against
+  M.tree = nil -- tree object of the revision's files (the base with the diff applied)
   M.files = {} -- changed files `{ status, path, old_path }`, see review.lua
   M.file_set = {} -- path -> file
   M.drafts = {} -- path -> list of unsubmitted inline threads

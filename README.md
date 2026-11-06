@@ -62,8 +62,15 @@ Run `:help phorge-review` for the full documentation.
    opens the review when it finishes.
 
    If the code is already in your working tree (your own branch, or the author's), run
-   `:Phab D123` instead, or just `:Phab` if the `HEAD` commit has a
-   `Differential Revision:` line.
+   `:Phab D123` instead, or just `:Phab` for the revision of the current branch. That is
+   the newest `Differential Revision:` line among the commits of the branch (those not
+   on the default branch). When the current branch is for another revision, `:Phab D123`
+   asks whether to review the diff only or the working tree anyway.
+
+   To review without touching your working tree, run `:Phab diff-only D123`. It fetches
+   the raw diff of the revision and applies it to the base commit in a temporary index.
+   Your branch, working tree and index do not change. The raw diff is cached, so the next
+   review of the same diff does not fetch it again.
 
 2. The panel opens on the left with the revision's details, the changed files, all
    inline comments, your drafts and the recent activity. Press `d` for the full
@@ -71,9 +78,10 @@ Run `:help phorge-review` for the full documentation.
 
 3. Press `<CR>` on a file. The base version opens on the left and your real file on the
    right, in diff mode. The right-hand side is a normal buffer, so `gd`, references and
-   hover all work. Use `zR` to unfold unchanged code and `]r` / `[r` to jump between
-   comments. Opening another file in the right-hand window (`:e`, `gf`, a picker) closes
-   the base version.
+   hover all work. With `:Phab diff-only` the right-hand side is the real file when it
+   has the revision's content, otherwise a read-only buffer without LSP. Use `zR` to
+   unfold unchanged code and `]r` / `[r` to jump between comments. Opening another file
+   in the right-hand window (`:e`, `gf`, a picker) closes the base version.
 
 4. To comment, press `<leader>rc` on a line or a visual selection, write your comment and
    save with `:w`. It is stored as a private draft on the server. Commenting on a line
@@ -112,7 +120,8 @@ The default branch is found automatically: `origin/HEAD`, then `origin/master`,
 
 | Command                     | What it does                                                                                                       |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `:Phab [D123]`              | Open a revision (`D123`, `123` or its URL). Without an argument, uses the `Differential Revision:` line of `HEAD`. |
+| `:Phab [D123]`              | Open a revision (`D123`, `123` or its URL). Without an argument, uses the revision of the current branch. |
+| `:Phab diff-only [D123]`    | Review the revision's raw diff applied to its base commit, without touching the working tree.                      |
 | `:Phab patch D123`          | Run `arc patch D123`, then open the review.                                                                        |
 | `:Phab local [ref]`         | Review local changes against the branch base, or against `ref`.                                                    |
 | `:Phab comment`             | Comment on the current line or the visual selection.                                                               |
@@ -195,7 +204,9 @@ scheme. See `:help phorge-review-highlights` to override them.
 
 - Revision details, the file list and comments come from the Conduit API.
 - Diffs are computed locally with `git`: your working tree against the revision's base
-  commit, or against the branch base in local mode.
+  commit, the revision's raw diff applied to that base commit (`:Phab diff-only`), or your
+  working tree against the branch base in local mode. The base commit must exist in the
+  repository.
 - Drafts are created and published through the same Conduit calls that the web
   UI's comment form uses.
 
@@ -208,4 +219,5 @@ scheme. See `:help phorge-review-highlights` to override them.
 - Marking a comment done, and editing or deleting a draft, are only possible in the web
   UI: use `:Phab browse`. Drafts deleted in the web UI stay visible in Neovim until you
   remove them from the file in `stdpath('state')/phorge-review/`.
-- Any changes in your working tree beyond the revision also show up in its diff.
+- Any changes in your working tree beyond the revision also show up in its diff, except
+  with `:Phab diff-only`.

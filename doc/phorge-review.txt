@@ -38,8 +38,11 @@ by a coding agent, and copy your comments to the clipboard as a prompt. See
   current directory) and the matching host entry in `~/.arcrc`, created by
   `arc install-certificate`. See |phorge-review-option-uri| and
   |phorge-review-option-token| for overrides.
-- The revision's code in your working tree, either because you authored it
-  or via |:Phab-patch|.
+- `arc`, only for |:Phab-patch|.
+- The revision's base commit in the repository. With |:Phab-diff-only| files
+  open as read-only buffers holding the revision's version; otherwise the
+  revision's code must be in your working tree (you authored it, or via
+  |:Phab-patch|).
 
 ==============================================================================
 3. SETUP                                                 *phorge-review-setup*
@@ -168,16 +171,29 @@ keymaps ~
                                                                        *:Phab*
 :Phab [{revision}]
     Open the review for {revision}, given as `D123`, `123` or a revision
-    URL. Without an argument the revision is taken from the
-    `Differential Revision:` trailer of the `HEAD` commit. Opens the
-    |phorge-review-panel|; a review that is already open for a different
-    revision is closed first.
+    URL. Without an argument the revision of the current branch is used: the
+    newest `Differential Revision:` trailer among the commits of the branch
+    (those not on the default branch), else the one of the `HEAD` commit.
+    Opens the |phorge-review-panel|; a review that is already open for a
+    different revision is closed first. The diff is against the working tree.
+    When the current branch is not for {revision}, asks whether to review the
+    diff only (|:Phab-diff-only|) or the working tree anyway.
+
+                                                            *:Phab-diff-only*
+:Phab diff-only [{revision}]
+    Like |:Phab|, but the revision's raw diff is applied to its base commit in
+    a temporary index. Neither the branch, the working tree nor the
+    repository's index change. The raw diff is cached, so reviewing the same
+    diff again does not fetch it. Files open as read-only buffers holding the
+    revision's version, or as the real file when the working tree already has
+    the revision's content.
 
                                                                *:Phab-comment*
 :[range]Phab comment
     Start an inline comment on the current line or on [range] (use a
     visual selection). Only works in a real file buffer inside the
-    repository, not in the base split. The comment is saved to Phabricator
+    repository or in the revision's version of a file (|:Phab-diff-only|),
+    not in the base split. The comment is saved to Phabricator
     as a private draft when the editor buffer is written (`:w` or
     `<C-s>`); `q` discards it.
 
@@ -300,9 +316,11 @@ Reviewing someone else's revision: >
 Reviewing your own branch: >
     :Phab
 <
-Any other way of getting the revision's files into the working tree works
-too (`arc patch --nobranch`, fetching the author's branch); then run
-`:Phab D123`.
+`:Phab diff-only D123` reviews the revision without touching the working tree:
+the raw diff of the revision is applied to its base commit in a temporary
+index, and files open as read-only buffers holding the revision's version.
+Files of the working tree that already have the revision's content open as
+real files.
 
 Then: open files from the panel (`<CR>`), navigate with LSP as usual in the
 right-hand window, `zR` to open folded context, `]r` / `[r` to jump between
@@ -311,7 +329,7 @@ existing threads, `<leader>rc` to comment or reply (saved as a draft on
 action, and `q` in the panel when done. Afterwards switch back to your
 branch and delete `arcpatch-D123`.
 
-Comments are anchored to the line in the current working tree. If a thread
+Comments are anchored to the line in the file shown on the right. If a thread
 was written against an older diff of the revision it is shown at its
 original line number and tagged `(on diff N)`.
 
@@ -352,7 +370,7 @@ All groups are defined with `default` links and can be overridden.
   the web UI (|:Phab-browse|). Draft bookkeeping is kept in
   `stdpath('state')/phorge-review/`; drafts published elsewhere are detected
   on refresh, drafts deleted in the web UI are not.
-- Local changes beyond the revision show up in the diff, since the diff is
-  computed against your working tree.
+- Local changes beyond the revision show up in the diff, except with
+  |:Phab-diff-only|.
 
 vim:tw=78:ts=8:ft=help:norl:

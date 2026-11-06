@@ -58,6 +58,27 @@ function M.read_json(path)
   end
 end
 
+function M.read_file(path)
+  local f = io.open(path, 'rb')
+  if not f then
+    return nil
+  end
+  local content = f:read('*a')
+  f:close()
+  return content
+end
+
+--- Writes `content` to `path`, creating its directory. A reader never sees a
+--- partial file.
+function M.write_file(path, content)
+  vim.fn.mkdir(vim.fs.dirname(path), 'p')
+  local tmp = path .. '.tmp'
+  local f = assert(io.open(tmp, 'wb'))
+  f:write(content)
+  f:close()
+  assert(os.rename(tmp, path))
+end
+
 function M.write_json(path, value)
   vim.fn.mkdir(vim.fs.dirname(path), 'p')
   local f = assert(io.open(path, 'w'))

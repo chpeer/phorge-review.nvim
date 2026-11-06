@@ -12,6 +12,44 @@ local M = {}
 
 local applied_keymaps = {}
 
+--- Cache directory of `diff_id`: its raw diff, the temporary index and the tree.
+local function diff_dir(diff_id)
+  return vim.fs.joinpath(vim.fn.stdpath('cache'), 'phorge-review', 'trees', tostring(diff_id))
+end
+
+--- Raw diff of `diff_id`, fetched once and then kept in its cache directory.
+--- Must run inside `async.run`. Returns `err, raw_diff`.
+local function load_raw_diff(diff_id)
+  local file = vim.fs.joinpath(diff_dir(diff_id), 'patch')
+  local cached = util.read_file(file)
+  if cached then
+    return nil, cached
+  end
+  local err, raw = async.await(conduit.call('differential.getrawdiff', { diffID = diff_id }))
+  if err then
+    return err
+  end
+  if raw then
+    util.write_file(file, raw)
+  end
+  return nil, raw
+end
+
+--- The tree of the revision's active diff applied to `base`, reused from the
+--- cache when the repository still has it. Returns `tree` or `nil, err`.
+local function load_tree(root, model, base)
+  local dir = diff_dir(model.diff_id)
+  local cached = vim.trim(util.read_file(vim.fs.joinpath(dir, 'tree')) or '')
+  if cached ~= '' and git.tree_exists(root, cached) then
+    return cached
+  end
+  local tree, err = git.build_tree(root, base, model.raw_diff, dir)
+  if tree then
+    util.write_file(vim.fs.joinpath(dir, 'tree'), tree)
+  end
+  return tree, err
+end
+
 --- Binds the configured global keys to the <Plug>(phorge-review-*) mappings.
 function M.apply_keymaps()
   for _, m in ipairs(applied_keymaps) do
@@ -69,7 +107,7 @@ local generation = 0
 
 --- Makes `model` the current review and opens or re-renders the panel. A
 --- review open for a different revision (or local vs. revision) is closed.
-local function activate(root, model, base)
+local function activate(root, model, base, tree)
   if state.active() and (state.model.id ~= model.id or state.model.is_local ~= model.is_local) then
     ui.close()
   end
@@ -77,7 +115,7 @@ local function activate(root, model, base)
   if reopen then
     state.reset()
   end
-  state.root, state.model, state.base = root, model, base
+  state.root, state.model, state.base, state.tree = root, model, base, tree
   state.files = model.files
   state.file_set = {}
   for _, f in ipairs(state.files) do
@@ -93,25 +131,37 @@ local function activate(root, model, base)
   comments.refresh_all()
 end
 
-local function load(id, root)
+local function load(id, root, diff_only)
   generation = generation + 1
   local my_generation = generation
   async.run(function()
-    local err, model = review.fetch(id)
+    local err, model = review.fetch(id, diff_only and load_raw_diff or nil)
     if generation ~= my_generation then
       return
     end
     if err then
       return util.notify(err, vim.log.levels.ERROR)
     end
+    model.diff_only = diff_only
     local base = resolve_base(root, model)
     if not base then
       return util.notify('could not determine a base commit for D' .. id, vim.log.levels.ERROR)
     end
+    local tree
+    if diff_only and model.raw_diff and model.base == base then
+      local terr
+      tree, terr = load_tree(root, model, base)
+      if not tree then
+        util.notify(
+          ("cannot apply D%d's diff to %s, showing the working tree: %s"):format(id, base:sub(1, 10), terr),
+          vim.log.levels.WARN
+        )
+      end
+    end
     local paths = vim.tbl_map(function(f)
       return f.path
     end, model.files)
-    if #paths > 0 and not git.has_changes(root, base, paths) then
+    if not tree and #paths > 0 and not git.has_changes(root, base, paths) then
       util.notify(
         ("working tree has no changes to D%d's files against %s; check out the revision or run `:Phab patch D%d`"):format(
           id,
@@ -121,7 +171,7 @@ local function load(id, root)
         vim.log.levels.WARN
       )
     end
-    activate(root, model, base)
+    activate(root, model, base, tree)
   end)
 end
 
@@ -166,8 +216,9 @@ function M.open_local(ref)
   load_local(ref ~= '' and ref or nil, root)
 end
 
---- Opens the review for `arg` (revision ID/URL) or the revision referenced by HEAD.
-function M.open(arg)
+--- Repository root and revision ID for `arg` (revision ID/URL) or the revision
+--- of the current branch. Returns nil after notifying when either is missing.
+local function resolve_revision(arg)
   local root = git.root(vim.fn.getcwd())
   if not root then
     return util.notify('not inside a git repository', vim.log.levels.ERROR)
@@ -176,12 +227,52 @@ function M.open(arg)
   if arg and arg ~= '' and not id then
     return util.notify('cannot parse revision from "' .. arg .. '"', vim.log.levels.ERROR)
   end
-  id = id or git.revision_from_head(root)
+  id = id or git.branch_revision(root)
   if not id then
-    return util.notify('no revision given and HEAD has no "Differential Revision:" trailer', vim.log.levels.ERROR)
+    return util.notify(
+      'no revision given and no commit of the branch has a "Differential Revision:" trailer',
+      vim.log.levels.ERROR
+    )
   end
+  return root, id
+end
+
+local function start(root, id, diff_only)
   util.notify(('fetching D%d…'):format(id))
-  load(id, root)
+  load(id, root, diff_only)
+end
+
+local DIFF_ONLY_CHOICE = 'Diff only (no checkout needed)'
+local WORKING_TREE_CHOICE = 'Working tree anyway'
+
+--- Opens the review of `arg` (revision ID/URL) or the revision of the current
+--- branch, against the working tree. When the current branch is for another
+--- revision, asks whether to review the diff only instead.
+function M.open(arg)
+  local root, id = resolve_revision(arg)
+  if not root then
+    return
+  end
+  local current = git.branch_revision(root)
+  if current == id then
+    return start(root, id, false)
+  end
+  local prompt = current and ('The current branch is for D%d, not D%d. Review:'):format(current, id)
+    or ('The current branch is not for D%d. Review:'):format(id)
+  vim.ui.select({ DIFF_ONLY_CHOICE, WORKING_TREE_CHOICE }, { prompt = prompt }, function(choice)
+    if choice then
+      start(root, id, choice == DIFF_ONLY_CHOICE)
+    end
+  end)
+end
+
+--- Opens the review of `arg` from the revision's raw diff applied to its base
+--- commit, leaving the working tree alone.
+function M.open_diff_only(arg)
+  local root, id = resolve_revision(arg)
+  if root then
+    start(root, id, true)
+  end
 end
 
 function M.refresh()
@@ -191,7 +282,7 @@ function M.refresh()
   if state.model.is_local then
     load_local(state.model.ref, state.root)
   else
-    load(state.model.id, state.root)
+    load(state.model.id, state.root, state.model.diff_only)
   end
 end
 
@@ -235,6 +326,7 @@ local subcommands = {
   open = function(arg)
     M.open(arg)
   end,
+  ['diff-only'] = M.open_diff_only,
   ['local'] = M.open_local,
   close = M.close,
   refresh = M.refresh,

@@ -4,6 +4,8 @@
 --     id, phid, title, summary, test_plan, status, closed, author, uri,
 --     reviewers = { { name, status, blocking } },
 --     diff_id, base, onto,
+--     raw_diff,                            -- unified diff of the active diff, if requested
+--     files = { { status, path, old_path } },
 --     inlines = { [path] = { thread } },   -- sorted by line
 --     timeline = { { author, date, text | action } },
 --   }
@@ -53,8 +55,9 @@ local function latest_comment(t)
   }
 end
 
---- Must run inside `async.run`. Returns `err, model`.
-function M.fetch(id)
+--- Must run inside `async.run`. Includes `raw_diff` when `load_raw_diff` is
+--- given: a function from a diff ID to `err, raw_diff`. Returns `err, model`.
+function M.fetch(id, load_raw_diff)
   local err, res = async.await(conduit.call('differential.revision.search', {
     constraints = { ids = { id } },
     attachments = { reviewers = true },
@@ -122,8 +125,14 @@ function M.fetch(id)
     end
   end
 
-  local files = {}
+  local files, raw_diff = {}, nil
   if active then
+    if load_raw_diff then
+      err, raw_diff = load_raw_diff(active.id)
+      if err then
+        return err
+      end
+    end
     local raw
     err, raw = async.await(conduit.call('differential.querydiffs', { ids = { active.id } }))
     if err then
@@ -205,6 +214,7 @@ function M.fetch(id)
       diff_id = active and active.id,
       base = base,
       onto = onto,
+      raw_diff = raw_diff,
       files = files,
       inlines = inlines,
       timeline = timeline,

@@ -108,6 +108,7 @@ function M.reset()
   stubs = {}
   pcall(vim.api.nvim_del_augroup_by_name, M.augroup)
   pcall(require('phorge-review').close)
+  vim.env.XDG_CACHE_HOME = vim.fn.tempname()
   require('phorge-review').setup()
   vim.cmd('silent! tabonly!')
   vim.cmd('silent! only!')

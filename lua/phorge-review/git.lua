@@ -6,7 +6,7 @@ local function git(root, args, opts)
     vim.list_extend(cmd, { '-C', root })
   end
   vim.list_extend(cmd, args)
-  local r = vim.system(cmd, { text = true }):wait()
+  local r = vim.system(cmd, { text = true, env = opts and opts.env, stdin = opts and opts.stdin }):wait()
   if r.code ~= 0 then
     return nil, vim.trim(r.stderr or '')
   end
@@ -24,6 +24,10 @@ function M.commit_exists(root, sha)
   return git(root, { 'cat-file', '-e', sha .. '^{commit}' }) ~= nil
 end
 
+function M.tree_exists(root, sha)
+  return git(root, { 'cat-file', '-e', sha .. '^{tree}' }) ~= nil
+end
+
 function M.ref_exists(root, ref)
   return git(root, { 'rev-parse', '--verify', '--quiet', ref }) ~= nil
 end
@@ -32,10 +36,24 @@ function M.merge_base(root, ref)
   return (git(root, { 'merge-base', ref, 'HEAD' }))
 end
 
---- Revision ID from the `Differential Revision:` trailer of HEAD, if any.
-function M.revision_from_head(root)
-  local body = git(root, { 'log', '-1', '--format=%B' }) or ''
-  return tonumber(body:match('Differential Revision:%s*%S-/D(%d+)'))
+local function trailer_revision(text)
+  return tonumber(text:match('Differential Revision:%s*%S-/D(%d+)') or text:match('Differential Revision:%s*D(%d+)'))
+end
+
+--- Revision ID of the current branch: the newest `Differential Revision:`
+--- trailer among its commits (those not on the default branch), else the one
+--- of HEAD, if any.
+function M.branch_revision(root)
+  for _, ref in ipairs({ 'origin/HEAD', 'origin/master', 'origin/main', 'master', 'main' }) do
+    if M.ref_exists(root, ref) then
+      local id = trailer_revision(git(root, { 'log', '--format=%B', ref .. '..HEAD' }) or '')
+      if id then
+        return id
+      end
+      break
+    end
+  end
+  return trailer_revision(git(root, { 'log', '-1', '--format=%B' }) or '')
 end
 
 function M.current_branch(root)
@@ -91,10 +109,37 @@ function M.show(root, rev, path)
   return (git(root, { 'show', rev .. ':' .. path }, { raw = true }))
 end
 
---- Hunks of `path` between `base` and the working tree.
-function M.hunks(root, base, path)
+--- Writes the tree of `base` with the unified diff `patch` applied to
+--- `<dir>/index` and returns its tree object. Neither the working tree, `HEAD`
+--- nor the repository's index change.
+function M.build_tree(root, base, patch, dir)
+  vim.fn.mkdir(dir, 'p')
+  local index = vim.fs.joinpath(dir, 'index')
+  os.remove(index)
+  local opts = { env = { GIT_INDEX_FILE = index } }
+  local _, err = git(root, { 'read-tree', base }, opts)
+  if err then
+    return nil, err
+  end
+  opts.stdin = patch
+  _, err = git(root, { 'apply', '--cached', '--whitespace=nowarn', '-' }, opts)
+  if err then
+    return nil, err
+  end
+  opts.stdin = nil
+  return git(root, { 'write-tree' }, opts)
+end
+
+--- Hunks of `path` between `base` and `target`: the tree object or commit
+--- given, or the working tree.
+function M.hunks(root, base, path, target)
   -- A configured external diff tool or forced colour would break the parsing.
-  local out = git(root, { 'diff', '--no-ext-diff', '--no-color', '-U0', base, '--', path }) or ''
+  local args = { 'diff', '--no-ext-diff', '--no-color', '-U0', base }
+  if target then
+    args[#args + 1] = target
+  end
+  vim.list_extend(args, { '--', path })
+  local out = git(root, args) or ''
   local hunks = {}
   for os_, oc, ns_, nc in ('\n' .. out):gmatch('\n@@ %-(%d+),?(%d*) %+(%d+),?(%d*) @@') do
     hunks[#hunks + 1] = {
