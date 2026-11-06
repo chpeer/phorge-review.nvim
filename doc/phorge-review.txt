@@ -38,8 +38,7 @@ by a coding agent, and copy your comments to the clipboard as a prompt. See
   current directory) and the matching host entry in `~/.arcrc`, created by
   `arc install-certificate`. See |phorge-review-option-uri| and
   |phorge-review-option-token| for overrides.
-- `arc` is optional: |:Phab-patch| needs it, and a bare |:Phab| asks
-  `arc which` for the revision of the current branch when it is available.
+- `arc`, only for |:Phab-patch|.
 - The revision's code in your working tree, either because you authored it
   or via |:Phab-patch|.
 
@@ -175,11 +174,10 @@ keymaps ~
 :Phab [{revision}]
     Open the review for {revision}, given as `D123`, `123` or a revision
     URL. Without an argument the revision of the current branch is used: the
-    first revision `arc which --show-revisions` lists, else the newest
-    `Differential Revision:` trailer among the commits of the branch (those
-    not on the default branch), else the one of the `HEAD` commit. Opens the
-    |phorge-review-panel|; a review that is already open for a different
-    revision is closed first.
+    newest `Differential Revision:` trailer among the commits of the branch
+    (those not on the default branch), else the one of the `HEAD` commit.
+    Opens the |phorge-review-panel|; a review that is already open for a
+    different revision is closed first.
 
                                                                *:Phab-comment*
 :[range]Phab comment
@@ -229,8 +227,8 @@ keymaps ~
 :Phab next-file
 :Phab prev-file
     Open the next / previous changed file in panel order, wrapping around.
-    Bound to `<Tab>` / `<S-Tab>` in the panel and in the review's file and base
-    buffers only; the keys are removed when the review closes.
+    Bound to `<Tab>` / `<S-Tab>` in the panel and in the review's file and
+    base buffers only; the keys are removed when the review closes.
 
                                                                 *:Phab-browse*
 :Phab browse

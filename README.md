@@ -28,8 +28,7 @@ Both modes share the same interface:
     with the `uri` option)
   - a Conduit API token, read from `~/.arcrc` as written by `arc install-certificate`
     (or set with the `token` option or `$PHORGE_REVIEW_TOKEN`)
-  - `arc`, if you want to use `:Phab patch`; a bare `:Phab` also asks `arc which` for the
-    revision of the current branch when it is available
+  - `arc`, if you want to use `:Phab patch`
 
 Local reviews need neither a server nor a token.
 
@@ -63,8 +62,9 @@ Run `:help phorge-review` for the full documentation.
    opens the review when it finishes.
 
    If the code is already in your working tree (your own branch, or the author's), run
-   `:Phab D123` instead, or just `:Phab` for the revision of the current branch (from
-   `arc which`, else the newest `Differential Revision:` line of its commits).
+   `:Phab D123` instead, or just `:Phab` for the revision of the current branch: the
+   newest `Differential Revision:` line among its commits (those not on the default
+   branch).
 
 2. The panel opens on the left with the revision's details, the changed files, all
    inline comments, your drafts and the recent activity. Press `d` for the full
