@@ -41,13 +41,13 @@ They only use standard Conduit API methods, so they will probably work with upst
 ### lazy.nvim
 
 ```lua
-{ 'thought-machine/phorge-review.nvim', version = '*', opts = {} }
+{ 'chpeer/phorge-review.nvim', version = '*', opts = {} }
 ```
 
 ### vim.pack (Neovim 0.12+)
 
 ```lua
-vim.pack.add({ { src = 'https://github.com/thought-machine/phorge-review.nvim', version = vim.version.range('*') } })
+vim.pack.add({ { src = 'https://github.com/chpeer/phorge-review.nvim', version = vim.version.range('*') } })
 ```
 
 Both follow tagged releases. Drop `version` to track the latest commit instead.
