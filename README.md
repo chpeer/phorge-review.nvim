@@ -30,7 +30,8 @@ Both modes share the same interface:
     with the `uri` option)
   - a Conduit API token, read from `~/.arcrc` as written by `arc install-certificate`
     (or set with the `token` option or `$PHORGE_REVIEW_TOKEN`)
-  - `arc`, if you want to use `:Phab patch`
+  - `arc`, if you want to use `:Phab patch`; a bare `:Phab` also asks `arc which` for the
+    revision of the current branch when it is available
 
 Local reviews need neither a server nor a token.
 
@@ -82,12 +83,14 @@ Run `:help phorge-review` for the full documentation.
    right, in diff mode. The right-hand side is a normal buffer, so `gd`, references and
    hover all work. With `:Phab diff-only` the right-hand side is the real file when it
    has the revision's content, otherwise a read-only buffer without LSP. Use `zR` to
-   unfold unchanged code and `]r` / `[r` to jump between comments. Opening another file
-   in the right-hand window (`:e`, `gf`, a picker) closes the base version.
+   unfold unchanged code, `<Tab>` / `<S-Tab>` to step through the changed files and
+   `]r` / `[r` to jump between comments, continuing in the next file with comments.
+   Opening another file in the right-hand window (`:e`, `gf`, a picker) closes the base version.
 
 4. To comment, press `<leader>rc` on a line or a visual selection, write your comment and
    save with `:w`. It is stored as a private draft on the server. Commenting on a line
-   that already has a thread replies to it.
+   that already has a thread replies to it. Your own comments are shown as `you`,
+   matched against `$USER`.
 
 5. When you are done, press `<leader>rs`. Set the `action:` line to `comment`, `accept`
    or `request-changes`, write an overall message and save with `:w`. All your drafts
@@ -128,7 +131,7 @@ The default branch is found automatically: `origin/HEAD`, then `origin/master`,
 | `:Phab local [ref]`         | Review local changes against the branch base, or against `ref`.                                                    |
 | `:Phab comment`             | Comment on the current line or the visual selection.                                                               |
 | `:Phab submit`              | Publish your drafts (revision) or copy them to the clipboard (local).                                              |
-| `:Phab next` / `:Phab prev` | Jump to the next / previous comment in the current file.                                                           |
+| `:Phab next` / `:Phab prev` | Jump to the next / previous comment, continuing in the next / previous file with comments.                         |
 | `:Phab toggle-comments`     | Hide or show inline comments.                                                                                      |
 | `:Phab files`               | Focus the panel.                                                                                                   |
 | `:Phab next-file` / `:Phab prev-file` | Open the next / previous changed file in panel order, wrapping around. |
@@ -146,25 +149,33 @@ Global keys:
 | ------------ | -------------------------------- |
 | `<leader>rc` | Comment on the line or selection |
 | `<leader>rs` | Submit                           |
-| `]r` / `[r`  | Next / previous comment, across files |
 | `<leader>rf` | Focus the panel                  |
 | `<leader>rt` | Hide / show comments             |
 | `<leader>rb` | Open in the browser              |
 
-You can change or disable them with the `keymaps` option. Each one is also available as a
-`<Plug>(phorge-review-<name>)` mapping, e.g. `<Plug>(phorge-review-comment)`.
+Keys set only in the panel and in the review's file buffers, and removed when the review
+closes:
+
+| Key                 | Action                                                                 |
+| ------------------- | ---------------------------------------------------------------------- |
+| `<Tab>` / `<S-Tab>` | Next / previous changed file, wrapping around                          |
+| `]r` / `[r`         | Next / previous comment, continuing in the next / previous file; in the panel, next / previous thread or draft |
+
+You can change or disable all of them with the `keymaps` option. Each one is also
+available as a `<Plug>(phorge-review-<name>)` mapping, e.g.
+`<Plug>(phorge-review-comment)`.
 
 In the panel:
 
-| Key          | Action                                                   |
-| ------------ | -------------------------------------------------------- |
-| `<CR>` / `o` | Open the file, fold the directory or jump to the comment |
-| `d`          | Description                                              |
-| `s`          | Submit                                                   |
-| `t`          | Hide / show comments                                     |
-| `R`          | Refresh                                                  |
-| `q`          | Close the review                                         |
-| `g?`         | Help                                                     |
+| Key                         | Action                                                   |
+| --------------------------- | -------------------------------------------------------- |
+| `<CR>` / `o` / double-click | Open the file, fold the directory or jump to the comment |
+| `d`                         | Description                                              |
+| `s`                         | Submit                                                   |
+| `t`                         | Hide / show comments                                     |
+| `R`                         | Refresh                                                  |
+| `q`                         | Close the review                                         |
+| `g?`                        | Help                                                     |
 
 In the comment and submit editors, `:w` or `<C-s>` sends and `q` cancels.
 
