@@ -410,4 +410,16 @@ return {
       }, h.drafts('a.txt'))
     end,
   },
+  {
+    'closes the diff split for a working-tree file without the revision in diff-only mode',
+    function()
+      open_revision(nil, true)
+      ui.open_file(state.file_set['a.txt'])
+      vim.cmd.edit('a.txt')
+      h.wait(function()
+        return state.base_win == nil
+      end, 'the diff split to close')
+      h.eq(false, vim.wo.diff)
+    end,
+  },
 }

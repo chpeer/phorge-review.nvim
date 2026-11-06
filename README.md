@@ -80,8 +80,10 @@ Run `:help phorge-review` for the full documentation.
    right, in diff mode. The right-hand side is a normal buffer, so `gd`, references and
    hover all work. With `:Phab diff-only` the right-hand side is the real file when it
    has the revision's content, otherwise a read-only buffer without LSP. Use `zR` to
-   unfold unchanged code and `]r` / `[r` to jump between comments. Opening another file
-   in the right-hand window (`:e`, `gf`, a picker) closes the base version.
+   unfold unchanged code and `]r` / `[r` to jump between comments. The base version
+   follows the right-hand window: jump to another changed file (`gd`, `:e`, a picker)
+   and its diff opens; jump to a file outside the review and the base version closes
+   until you come back (`<C-o>`).
 
 4. To comment, press `<leader>rc` on a line or a visual selection, write your comment and
    save with `:w`. It is stored as a private draft on the server. Commenting on a line
@@ -199,6 +201,26 @@ require('phorge-review').setup({
 
 All colours are highlight groups linked to standard ones, so they follow your colour
 scheme. See `:help phorge-review-highlights` to override them.
+
+### Syntax colours on changed lines
+
+The diff view uses Neovim's own diff highlighting (`DiffAdd`, `DiffChange`, `DiffText`).
+Some colour schemes give these groups a fixed text colour as well as a background, which
+hides the syntax colours on changed lines. To keep only the backgrounds, add this to your
+config before the `colorscheme` command:
+
+```lua
+vim.api.nvim_create_autocmd('ColorScheme', {
+  pattern = '*', -- or just the name of your colour scheme
+  callback = function()
+    for _, group in ipairs({ 'DiffAdd', 'DiffChange', 'DiffText' }) do
+      local hl = vim.api.nvim_get_hl(0, { name = group, link = false })
+      hl.fg, hl.ctermfg = nil, nil
+      vim.api.nvim_set_hl(0, group, hl)
+    end
+  end,
+})
+```
 
 ## How it works
 

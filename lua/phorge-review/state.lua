@@ -17,6 +17,7 @@ function M.reset()
   M.main_win = nil
   M.base_win = nil
   M.base_buf = nil
+  M.diff_buf = nil -- file buffer the base split is diffed against
 end
 
 function M.active()

@@ -411,14 +411,13 @@ end
 local diff_group = api.nvim_create_augroup('phorge-review.diff', { clear = true })
 
 local function close_base()
-  api.nvim_clear_autocmds({ group = diff_group })
   if win_valid(state.base_win) then
     api.nvim_win_close(state.base_win, true)
   end
   if buf_valid(state.base_buf) then
     api.nvim_buf_delete(state.base_buf, { force = true })
   end
-  state.base_win, state.base_buf = nil, nil
+  state.base_win, state.base_buf, state.diff_buf = nil, nil, nil
 end
 
 --- Shows `content`, the base version of `path` or, with `revision`, the
@@ -443,6 +442,74 @@ local function base_buffer(win, path, content, revision)
     vim.bo[buf].filetype = ft
   end
   return buf
+end
+
+--- Opens the base version of `file` in a split left of the current window,
+--- which shows the file, and diffs the two.
+local function show_diff(file, base_content)
+  local main = api.nvim_get_current_win()
+  vim.cmd('leftabove vsplit')
+  local win = api.nvim_get_current_win()
+  local buf = base_buffer(win, file.old_path or file.path, base_content)
+  vim.cmd.diffthis()
+  state.base_win, state.base_buf = win, buf
+  api.nvim_set_current_win(main)
+  vim.cmd.diffthis()
+  state.diff_buf = api.nvim_win_get_buf(main)
+  if not config.options.diff_folds then
+    vim.wo[win].foldenable = false
+    vim.wo[main].foldenable = false
+  end
+end
+
+--- Keeps the diff split in step with the main window. 'diff' is window-local,
+--- so when the main window shows another buffer (:e, gd, <C-o>, a picker),
+--- the split is replaced by that file's diff if it is part of the review, and
+--- dropped otherwise.
+local function follow_main_win()
+  api.nvim_clear_autocmds({ group = diff_group })
+  api.nvim_create_autocmd('BufWinEnter', {
+    group = diff_group,
+    callback = function()
+      -- Deferred so that jumps such as gd have placed the cursor already.
+      vim.schedule(function()
+        local main = state.main_win
+        if not state.active() or M.opening or not win_valid(main) then
+          return
+        end
+        local buf = api.nvim_win_get_buf(main)
+        if buf == state.diff_buf and win_valid(state.base_win) then
+          return
+        end
+        local path = require('phorge-review.comments').relpath(buf)
+        local file = path and state.file_set[path]
+        if
+          file
+          and state.tree
+          and not vim.b[buf].phorge_review_path
+          and git.show(state.root, state.tree, file.path) ~= util.read_file(vim.fs.joinpath(state.root, file.path))
+        then
+          -- Diff only: like open_file, only diff the real file when it has the
+          -- revision's content; otherwise the diff would not be the revision's.
+          file = nil
+        end
+        local base_content = file
+          and file.status ~= 'A'
+          and file.status ~= 'D'
+          and git.show(state.root, state.base, file.old_path or file.path)
+        local cur = api.nvim_get_current_win()
+        api.nvim_set_current_win(main)
+        close_base()
+        vim.cmd.diffoff()
+        if base_content then
+          show_diff(file, base_content)
+        end
+        if win_valid(cur) then
+          api.nvim_set_current_win(cur)
+        end
+      end)
+    end,
+  })
 end
 
 --- Opens `file` (an entry of `model.files`, see review.lua) in the main
@@ -501,34 +568,16 @@ function M.open_file(file)
     )
   end
 
-  if config.options.diff_split and base_content then
-    vim.cmd('leftabove vsplit')
-    local win = api.nvim_get_current_win()
-    local buf = base_buffer(win, file.old_path or file.path, base_content)
-    vim.cmd.diffthis()
-    state.base_win, state.base_buf = win, buf
-    api.nvim_set_current_win(main)
-    vim.cmd.diffthis()
-    if not config.options.diff_folds then
-      vim.wo[win].foldenable = false
-      vim.wo[main].foldenable = false
+  if config.options.diff_split then
+    if base_content then
+      show_diff(file, base_content)
+      -- `]c` moves to the next change after the cursor, skipping one on line 1.
+      vim.cmd('normal! gg')
+      if vim.fn.diff_hlID(1, 1) == 0 then
+        vim.cmd('normal! ]c')
+      end
     end
-    -- `]c` moves to the next change after the cursor, skipping one on line 1.
-    vim.cmd('normal! gg')
-    if vim.fn.diff_hlID(1, 1) == 0 then
-      vim.cmd('normal! ]c')
-    end
-    -- 'diff' is window-local: once the main window shows another buffer (:e,
-    -- gf, a picker), drop the split so it is not diffed against this base.
-    api.nvim_create_autocmd('BufWinEnter', {
-      group = diff_group,
-      callback = function(ev)
-        if api.nvim_get_current_win() == main and ev.buf ~= file_buf then
-          close_base()
-          vim.cmd.diffoff()
-        end
-      end,
-    })
+    follow_main_win()
   end
   require('phorge-review.comments').refresh_buf(file_buf)
 end
@@ -606,6 +655,7 @@ function M.description()
 end
 
 function M.close()
+  api.nvim_clear_autocmds({ group = diff_group })
   close_base()
   if win_valid(state.panel_win) and #api.nvim_tabpage_list_wins(0) > 1 then
     api.nvim_win_close(state.panel_win, true)
