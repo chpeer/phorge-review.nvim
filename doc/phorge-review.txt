@@ -38,6 +38,8 @@ by a coding agent, and copy your comments to the clipboard as a prompt. See
   current directory) and the matching host entry in `~/.arcrc`, created by
   `arc install-certificate`. See |phorge-review-option-uri| and
   |phorge-review-option-token| for overrides.
+- `arc` is optional: |:Phab-patch| needs it, and a bare |:Phab| asks
+  `arc which` for the revision of the current branch when it is available.
 - The revision's code in your working tree, either because you authored it
   or via |:Phab-patch|.
 
@@ -190,7 +192,8 @@ keymaps ~
     To reply to an existing thread, comment on its line: Conduit has no
     reply parameter, so the new inline is created on the same line and
     Phabricator shows it under the thread. The editor title indicates
-    whom you are replying to.
+    whom you are replying to. Comments whose author equals `$USER` are shown
+    as `you`.
 
                                                                 *:Phab-submit*
 :Phab submit
@@ -211,7 +214,7 @@ keymaps ~
     the last / before the first one, continue in the next / previous file with
     comments in panel order, wrapping around. In the panel, jump to the next /
     previous thread or draft entry. Bound to `]r` / `[r` in the panel and the
-    review's file buffers only.
+    review's file and base buffers only.
 
                                                        *:Phab-toggle-comments*
 :Phab toggle-comments
@@ -238,8 +241,8 @@ keymaps ~
 
                                                                   *:Phab-help*
 :Phab help
-    Show the currently configured global keys and the panel keys in a
-    floating window. Also `g?` in the panel.
+    Show the currently configured keys and the panel keys in a floating
+    window. Also `g?` in the panel.
 
                                                                *:Phab-refresh*
 :Phab refresh
@@ -304,6 +307,9 @@ Keys in the panel:
 
   <CR> / o / <2-LeftMouse>
              open file; fold / unfold directory; jump to thread
+  <Tab> / <S-Tab>
+             |:Phab-next-file| / |:Phab-prev-file|
+  ]r / [r    next / previous thread or draft entry
   d          |:Phab-description|
   s          |:Phab-submit|
   t          |:Phab-toggle-comments|
@@ -325,8 +331,9 @@ too (`arc patch --nobranch`, fetching the author's branch); then run
 `:Phab D123`.
 
 Then: open files from the panel (`<CR>`), navigate with LSP as usual in the
-right-hand window, `zR` to open folded context, `]r` / `[r` to jump between
-existing threads, `<leader>rc` to comment or reply (saved as a draft on
+right-hand window, `zR` to open folded context, `<Tab>` / `<S-Tab>` to step
+through the changed files, `]r` / `[r` to jump between existing threads across
+files, `<leader>rc` to comment or reply (saved as a draft on
 `:w`), `<leader>rs` to publish all drafts with an overall message and
 action, and `q` in the panel when done. Afterwards switch back to your
 branch and delete `arcpatch-D123`.
