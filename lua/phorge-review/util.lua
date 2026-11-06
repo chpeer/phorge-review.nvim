@@ -11,9 +11,15 @@ function M.fmt_date(ts)
   return os.date('%Y-%m-%d %H:%M', ts)
 end
 
---- First line of `text`, truncated to `width` display cells.
+--- `author` as shown to the user: "you" for the current $USER.
+function M.display_author(author)
+  return author == vim.env.USER and 'you' or author
+end
+
+--- First non-empty line of `text` without its leading whitespace, truncated to
+--- `width` display cells.
 function M.one_line(text, width)
-  local line = (text or ''):match('[^\r\n]*%S[^\r\n]*') or ''
+  local line = (text or ''):match('%S[^\r\n]*') or ''
   if vim.fn.strdisplaywidth(line) > width then
     line = vim.fn.strcharpart(line, 0, math.max(width - 1, 1)) .. '…'
   end

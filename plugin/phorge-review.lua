@@ -51,6 +51,13 @@ vim.keymap.set(
   { desc = 'phorge-review: toggle comments' }
 )
 vim.keymap.set('n', '<Plug>(phorge-review-submit)', '<Cmd>Phab submit<CR>', { desc = 'phorge-review: submit review' })
+vim.keymap.set('n', '<Plug>(phorge-review-next-file)', '<Cmd>Phab next-file<CR>', { desc = 'phorge-review: next file' })
+vim.keymap.set(
+  'n',
+  '<Plug>(phorge-review-prev-file)',
+  '<Cmd>Phab prev-file<CR>',
+  { desc = 'phorge-review: previous file' }
+)
 vim.keymap.set('n', '<Plug>(phorge-review-files)', '<Cmd>Phab files<CR>', { desc = 'phorge-review: focus panel' })
 vim.keymap.set('n', '<Plug>(phorge-review-browse)', '<Cmd>Phab browse<CR>', { desc = 'phorge-review: open in browser' })
 require('phorge-review').apply_keymaps()

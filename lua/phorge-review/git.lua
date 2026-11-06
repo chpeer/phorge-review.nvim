@@ -32,10 +32,33 @@ function M.merge_base(root, ref)
   return (git(root, { 'merge-base', ref, 'HEAD' }))
 end
 
---- Revision ID from the `Differential Revision:` trailer of HEAD, if any.
-function M.revision_from_head(root)
-  local body = git(root, { 'log', '-1', '--format=%B' }) or ''
-  return tonumber(body:match('Differential Revision:%s*%S-/D(%d+)'))
+local function trailer_revision(log)
+  return tonumber(log:match('Differential Revision:%s*%S-/D(%d+)'))
+end
+
+--- Revision ID of the current branch: the first revision `arc which` lists,
+--- else the newest `Differential Revision:` trailer among the commits of the
+--- branch (those not on the default branch), else the one of HEAD.
+function M.branch_revision(root)
+  local ok, r = pcall(function()
+    return vim.system({ 'arc', 'which', '--show-revisions' }, { cwd = root, text = true, stdin = false }):wait()
+  end)
+  if ok and r.code == 0 then
+    local id = tonumber(((vim.split(vim.trim(r.stdout or ''), '%s+')[1] or ''):gsub('^D', '')))
+    if id then
+      return id
+    end
+  end
+  for _, ref in ipairs({ 'origin/HEAD', 'origin/master', 'origin/main', 'master', 'main' }) do
+    if M.ref_exists(root, ref) then
+      local id = trailer_revision(git(root, { 'log', '--format=%B', ref .. '..HEAD' }) or '')
+      if id then
+        return id
+      end
+      break
+    end
+  end
+  return trailer_revision(git(root, { 'log', '-1', '--format=%B' }) or '')
 end
 
 function M.current_branch(root)

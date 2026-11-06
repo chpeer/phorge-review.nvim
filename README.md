@@ -62,8 +62,8 @@ Run `:help phorge-review` for the full documentation.
    opens the review when it finishes.
 
    If the code is already in your working tree (your own branch, or the author's), run
-   `:Phab D123` instead, or just `:Phab` if the `HEAD` commit has a
-   `Differential Revision:` line.
+   `:Phab D123` instead, or just `:Phab` for the revision of the current branch (from
+   `arc which`, else the newest `Differential Revision:` line of its commits).
 
 2. The panel opens on the left with the revision's details, the changed files, all
    inline comments, your drafts and the recent activity. Press `d` for the full
@@ -112,7 +112,7 @@ The default branch is found automatically: `origin/HEAD`, then `origin/master`,
 
 | Command                     | What it does                                                                                                       |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `:Phab [D123]`              | Open a revision (`D123`, `123` or its URL). Without an argument, uses the `Differential Revision:` line of `HEAD`. |
+| `:Phab [D123]`              | Open a revision (`D123`, `123` or its URL). Without an argument, uses the revision of the current branch. |
 | `:Phab patch D123`          | Run `arc patch D123`, then open the review.                                                                        |
 | `:Phab local [ref]`         | Review local changes against the branch base, or against `ref`.                                                    |
 | `:Phab comment`             | Comment on the current line or the visual selection.                                                               |
@@ -120,6 +120,7 @@ The default branch is found automatically: `origin/HEAD`, then `origin/master`,
 | `:Phab next` / `:Phab prev` | Jump to the next / previous comment in the current file.                                                           |
 | `:Phab toggle-comments`     | Hide or show inline comments.                                                                                      |
 | `:Phab files`               | Focus the panel.                                                                                                   |
+| `:Phab next-file` / `:Phab prev-file` | Open the next / previous changed file in panel order, wrapping around. |
 | `:Phab description`         | Show the revision's summary, test plan and full timeline.                                                          |
 | `:Phab browse`              | Open the comment under the cursor, or the revision, in the browser.                                                |
 | `:Phab refresh`             | Reload the review.                                                                                                 |
@@ -134,7 +135,7 @@ Global keys:
 | ------------ | -------------------------------- |
 | `<leader>rc` | Comment on the line or selection |
 | `<leader>rs` | Submit                           |
-| `]r` / `[r`  | Next / previous comment          |
+| `]r` / `[r`  | Next / previous comment, across files |
 | `<leader>rf` | Focus the panel                  |
 | `<leader>rt` | Hide / show comments             |
 | `<leader>rb` | Open in the browser              |
@@ -152,7 +153,7 @@ In the panel:
 | `t`          | Hide / show comments                                     |
 | `R`          | Refresh                                                  |
 | `q`          | Close the review                                         |
-| `?`          | Help                                                     |
+| `g?`         | Help                                                     |
 
 In the comment and submit editors, `:w` or `<C-s>` sends and `q` cancels.
 
@@ -182,8 +183,10 @@ require('phorge-review').setup({
   },
   panel_timeline = 8,   -- number of recent activity entries in the panel
   keymaps = {           -- set a key to false to skip it, or keymaps = false for none
+    next_file = '<Tab>', prev_file = '<S-Tab>',  -- buffer-local to the panel and review files
     comment = '<leader>rc', submit = '<leader>rs', files = '<leader>rf',
-    toggle_comments = '<leader>rt', browse = '<leader>rb', next = ']r', prev = '[r',
+    toggle_comments = '<leader>rt', browse = '<leader>rb',
+    next = ']r', prev = '[r',  -- buffer-local to the panel and review files
   },
 })
 ```

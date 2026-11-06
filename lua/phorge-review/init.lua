@@ -23,7 +23,7 @@ function M.apply_keymaps()
     return
   end
   for name, lhs in pairs(keymaps) do
-    if lhs then
+    if lhs and not ui.BUFFER_KEYMAPS[name] then
       local mode = name == 'comment' and { 'n', 'x' } or 'n'
       local plug = ('<Plug>(phorge-review-%s)'):format(name:gsub('_', '-'))
       vim.keymap.set(mode, lhs, plug, { desc = 'phorge-review: ' .. name:gsub('_', ' ') })
@@ -176,9 +176,12 @@ function M.open(arg)
   if arg and arg ~= '' and not id then
     return util.notify('cannot parse revision from "' .. arg .. '"', vim.log.levels.ERROR)
   end
-  id = id or git.revision_from_head(root)
+  id = id or git.branch_revision(root)
   if not id then
-    return util.notify('no revision given and HEAD has no "Differential Revision:" trailer', vim.log.levels.ERROR)
+    return util.notify(
+      'no revision given and no commit of the branch has a "Differential Revision:" trailer',
+      vim.log.levels.ERROR
+    )
   end
   util.notify(('fetching D%d…'):format(id))
   load(id, root)
@@ -246,6 +249,12 @@ local subcommands = {
   ['toggle-comments'] = comments.toggle_comments,
   description = ui.description,
   files = ui.open_panel,
+  ['next-file'] = function()
+    ui.step_file(1)
+  end,
+  ['prev-file'] = function()
+    ui.step_file(-1)
+  end,
   browse = comments.browse,
   help = ui.help,
   next = function()

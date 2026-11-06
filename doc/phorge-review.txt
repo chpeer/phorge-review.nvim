@@ -80,6 +80,8 @@ Defaults: >lua
       },
       panel_timeline = 8,
       keymaps = {
+        next_file = '<Tab>',
+        prev_file = '<S-Tab>',
         comment = '<leader>rc',
         submit = '<leader>rs',
         files = '<leader>rf',
@@ -157,10 +159,12 @@ panel_timeline ~
 
                                                 *phorge-review-option-keymaps*
 keymaps ~
-    Global keys bound to the |phorge-review-plug| mappings. Set an individual
-    entry to `false` to leave that action unbound, or the whole table to
-    `false` to define no global keys. `comment` is bound in normal and
-    visual mode, the rest in normal mode.
+    Keys bound to the |phorge-review-plug| mappings. Set an individual entry
+    to `false` to leave that action unbound, or the whole table to `false` to
+    define no keys. `comment` is bound in normal and visual mode, the rest in
+    normal mode. `next_file`, `prev_file`, `next` and `prev` are buffer-local
+    to the panel and the review's buffers; they are removed when the review
+    closes. The rest are global.
 
 ==============================================================================
 5. COMMANDS                                           *phorge-review-commands*
@@ -168,8 +172,10 @@ keymaps ~
                                                                        *:Phab*
 :Phab [{revision}]
     Open the review for {revision}, given as `D123`, `123` or a revision
-    URL. Without an argument the revision is taken from the
-    `Differential Revision:` trailer of the `HEAD` commit. Opens the
+    URL. Without an argument the revision of the current branch is used: the
+    first revision `arc which --show-revisions` lists, else the newest
+    `Differential Revision:` trailer among the commits of the branch (those
+    not on the default branch), else the one of the `HEAD` commit. Opens the
     |phorge-review-panel|; a review that is already open for a different
     revision is closed first.
 
@@ -201,7 +207,11 @@ keymaps ~
                                                                   *:Phab-prev*
 :Phab next
 :Phab prev
-    Jump to the next / previous commented line in the current buffer.
+    Jump to the next / previous commented line in the current buffer. After
+    the last / before the first one, continue in the next / previous file with
+    comments in panel order, wrapping around. In the panel, jump to the next /
+    previous thread or draft entry. Bound to `]r` / `[r` in the panel and the
+    review's file buffers only.
 
                                                        *:Phab-toggle-comments*
 :Phab toggle-comments
@@ -211,6 +221,13 @@ keymaps ~
                                                                  *:Phab-files*
 :Phab files
     Focus the panel, opening it if needed.
+
+                                                            *:Phab-next-file*
+:Phab next-file
+:Phab prev-file
+    Open the next / previous changed file in panel order, wrapping around.
+    Bound to `<Tab>` / `<S-Tab>` in the panel and in the review's file and base
+    buffers only; the keys are removed when the review closes.
 
                                                                 *:Phab-browse*
 :Phab browse
@@ -222,7 +239,7 @@ keymaps ~
                                                                   *:Phab-help*
 :Phab help
     Show the currently configured global keys and the panel keys in a
-    floating window. Also `?` in the panel.
+    floating window. Also `g?` in the panel.
 
                                                                *:Phab-refresh*
 :Phab refresh
@@ -261,6 +278,8 @@ The following |<Plug>| mappings are always defined:
   <Plug>(phorge-review-files)     |:Phab-files|
   <Plug>(phorge-review-toggle-comments)  |:Phab-toggle-comments|
   <Plug>(phorge-review-browse)    |:Phab-browse|
+  <Plug>(phorge-review-next-file)  |:Phab-next-file|
+  <Plug>(phorge-review-prev-file)  |:Phab-prev-file|
   <Plug>(phorge-review-next)      |:Phab-next|
   <Plug>(phorge-review-prev)      |:Phab-prev|
 
@@ -283,13 +302,14 @@ File entries carry a status letter (`A`dded, `M`odified, `D`eleted,
 
 Keys in the panel:
 
-  <CR> / o   open file; fold / unfold directory; jump to thread
+  <CR> / o / <2-LeftMouse>
+             open file; fold / unfold directory; jump to thread
   d          |:Phab-description|
   s          |:Phab-submit|
   t          |:Phab-toggle-comments|
   R          |:Phab-refresh|
   q          |:Phab-close|
-  ?          |:Phab-help|
+  g?         |:Phab-help|
 
 ==============================================================================
 8. WORKFLOW                                           *phorge-review-workflow*

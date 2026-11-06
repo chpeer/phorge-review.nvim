@@ -125,6 +125,24 @@ end
 
 return {
   {
+    'jumps between thread entries in the panel with the comment keys',
+    function()
+      open_revision()
+      ui.open_panel()
+      vim.api.nvim_win_set_cursor(0, { 1, 0 })
+      vim.cmd('normal ]r')
+      local row = vim.api.nvim_win_get_cursor(0)[1]
+      h.eq(
+        { kind = 'thread', path = 'a.txt' },
+        { kind = state.panel_items[row].kind, path = state.panel_items[row].path }
+      )
+      -- There is a single thread, so the cursor stays on it in both directions.
+      vim.cmd('normal ]r')
+      vim.cmd('normal [r')
+      h.eq(row, vim.api.nvim_win_get_cursor(0)[1])
+    end,
+  },
+  {
     'shows a multi-line title on one line in the panel',
     function()
       h.stub(REVISION.fields, 'title', 'Shout the\nsecond line')

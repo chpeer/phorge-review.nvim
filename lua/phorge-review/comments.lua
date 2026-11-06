@@ -56,7 +56,7 @@ local function thread_virt_lines(thread, width, is_draft)
   for i, c in ipairs(thread.comments) do
     local indent = i == 1 and '' or '    '
     local header = {
-      { (i == 1 and '' or '  ↳ ') .. c.author, 'PhorgeReviewAuthor' },
+      { (i == 1 and '' or '  ↳ ') .. util.display_author(c.author), 'PhorgeReviewAuthor' },
       { ' · ' .. util.fmt_date(c.date), 'PhorgeReviewMeta' },
     }
     if i == 1 then
@@ -205,7 +205,8 @@ function M.toggle_comments()
   require('phorge-review.ui').render_panel()
 end
 
---- Moves the cursor to the next/previous commented line in the current buffer.
+--- Moves the cursor to the next/previous commented line in the current buffer,
+--- continuing in the next/previous file that has comments after the last/first.
 function M.jump(direction)
   local buf = api.nvim_get_current_buf()
   local cur = api.nvim_win_get_cursor(0)[1] - 1
@@ -223,6 +224,8 @@ function M.jump(direction)
   end
   if best then
     api.nvim_win_set_cursor(0, { best + 1, 0 })
+  elseif state.active() and not state.hidden then
+    require('phorge-review.ui').jump_comment_file(direction)
   else
     util.notify('no more comments in this buffer')
   end
@@ -406,7 +409,8 @@ function M.new_comment(line1, line2)
   local existing = line1 == line2 and thread_at(path, line1)
   open_editor({
     name = 'comment',
-    title = existing and ('Reply to %s on %s'):format(existing.comments[1].author, where) or 'Comment on ' .. where,
+    title = existing and ('Reply to %s on %s'):format(util.display_author(existing.comments[1].author), where)
+      or 'Comment on ' .. where,
     insert = true,
     near_cursor = true,
     on_submit = function(lines)
