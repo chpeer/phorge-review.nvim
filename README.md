@@ -1,4 +1,6 @@
 # phorge-review.nvim
+![local code review](https://github.com/chpeer/phorge-review.nvim/blob/master/assets/code_review.png)
+
 
 Review code (incl. comments) inside Neovim, on the real files in your working tree,
 so LSP, Treesitter and the rest of your setup keep working while you read the diff.
