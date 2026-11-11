@@ -1,5 +1,5 @@
 # phorge-review.nvim
-![local code review](https://github.com/chpeer/phorge-review.nvim/blob/feat/add-screenshot/assets/code_review.png)
+![local code review](https://github.com/chpeer/phorge-review.nvim/blob/master/assets/code_review.png)
 
 
 Review code (incl. comments) inside Neovim, on the real files in your working tree,
