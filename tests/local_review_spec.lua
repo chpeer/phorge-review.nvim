@@ -206,6 +206,44 @@ return {
     end,
   },
   {
+    'reopens the diff split when a jump returns to a changed file',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['a.txt'])
+      vim.api.nvim_win_set_cursor(0, { 3, 0 })
+      vim.cmd.edit('new.txt')
+      vim.cmd('normal! ' .. vim.keycode('<C-o>'))
+      h.wait(function()
+        return state.base_win and vim.api.nvim_win_is_valid(state.base_win)
+      end, 'diff split')
+      h.eq({
+        file = 'a.txt',
+        base = 'phorge-review://base/a.txt',
+        cursor = 3,
+        diff = true,
+      }, {
+        file = vim.fs.basename(vim.api.nvim_buf_get_name(0)),
+        base = vim.api.nvim_buf_get_name(state.base_buf),
+        cursor = vim.api.nvim_win_get_cursor(0)[1],
+        diff = vim.wo.diff,
+      })
+    end,
+  },
+  {
+    'opens the diff split of a changed file reached from another one',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['a.txt'])
+      vim.cmd.edit('c.txt')
+      h.wait(function()
+        return state.base_buf and vim.api.nvim_buf_get_name(state.base_buf):match('b%.txt$')
+      end, 'diff split of c.txt')
+      h.eq(3, #vim.api.nvim_tabpage_list_wins(0))
+    end,
+  },
+  {
     'renders the comments of a file once when opening it',
     function()
       h.feature_repo()
@@ -239,6 +277,58 @@ return {
         return m[2]
       end, vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {}))
       h.eq({ 0, 1 }, rows)
+    end,
+  },
+  {
+    'opens the review in its own tab and leaves the layout of the others alone',
+    function()
+      h.feature_repo()
+      vim.cmd.edit('a.txt')
+      vim.cmd('vsplit b.txt')
+      local tab = vim.api.nvim_get_current_tabpage()
+      local layout = vim.fn.winlayout()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['c.txt'])
+      h.eq(2, #vim.api.nvim_list_tabpages())
+      h.eq(true, state.tabpage ~= tab)
+      h.eq(layout, vim.fn.winlayout(vim.api.nvim_tabpage_get_number(tab)))
+      vim.cmd('Phab close')
+      h.eq({ tab }, vim.api.nvim_list_tabpages())
+      h.eq(layout, vim.fn.winlayout())
+    end,
+  },
+  {
+    'opens the first file of the panel in the new tab with the cursor in the panel',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      h.eq(state.panel_win, vim.api.nvim_get_current_win())
+      h.eq('a.txt', vim.fs.basename(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(state.main_win))))
+      h.eq(true, vim.api.nvim_win_is_valid(state.base_win))
+      vim.api.nvim_win_close(state.panel_win, true)
+      ui.open_file(state.file_set['c.txt'])
+      vim.cmd('Phab files')
+      h.eq('c.txt', vim.fs.basename(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(state.main_win))))
+    end,
+  },
+  {
+    'closes the review when its tab is closed',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      local panel_buf = state.panel_buf
+      vim.cmd('tabclose')
+      h.eq({ false, false }, { state.active(), vim.api.nvim_buf_is_valid(panel_buf) })
+    end,
+  },
+  {
+    'closes the review when it is the only tab',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      vim.cmd('tabonly')
+      vim.cmd('Phab close')
+      h.eq({ false, 1 }, { state.active(), #vim.api.nvim_list_tabpages() })
     end,
   },
 }

@@ -83,6 +83,16 @@ set_highlights()
 
 local group = vim.api.nvim_create_augroup('phorge-review', { clear = true })
 vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = set_highlights })
+-- Closing the review tab closes the review.
+vim.api.nvim_create_autocmd('TabClosed', {
+  group = group,
+  callback = function()
+    local state = package.loaded['phorge-review.state']
+    if state and state.active() and state.tabpage and not vim.api.nvim_tabpage_is_valid(state.tabpage) then
+      require('phorge-review').close()
+    end
+  end,
+})
 vim.api.nvim_create_autocmd({ 'BufWinEnter', 'BufReadPost' }, {
   group = group,
   callback = function(ev)
@@ -92,6 +102,9 @@ vim.api.nvim_create_autocmd({ 'BufWinEnter', 'BufReadPost' }, {
       and not require('phorge-review.ui').opening
     then
       require('phorge-review.comments').refresh_buf(ev.buf)
+      if ev.event == 'BufWinEnter' then
+        require('phorge-review.ui').reopen_split(ev.buf)
+      end
     end
   end,
 })

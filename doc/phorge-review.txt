@@ -125,7 +125,8 @@ diff_split ~
     `true` (default): opening a file shows the base version in a vertical
     split on the left, both windows in |diff-mode|; the right window is the
     real file. Showing another buffer in the right window (|:edit|, |gf|, a
-    picker) closes the split.
+    picker) closes the split; showing a changed file there again (|CTRL-O|,
+    a picker) reopens it.
     `false`: only the real file is opened and changed lines are marked in
     the sign column and highlighted (|hl-PhorgeReviewAddedLine|,
     |hl-PhorgeReviewChangedLine|, |hl-PhorgeReviewDeleted|).
@@ -264,7 +265,8 @@ keymaps ~
 
                                                                  *:Phab-close*
 :Phab close
-    Close the panel and diff split, and remove all marks.
+    Close the review tab and remove all marks. Closing the tab with
+    `:tabclose` closes the review too.
 
 ==============================================================================
 6. KEYMAPS                                             *phorge-review-keymaps*
@@ -288,10 +290,11 @@ Inside the comment and submit editors: `:w` / `<C-s>` sends, `q` cancels.
 ==============================================================================
 7. PANEL                                                 *phorge-review-panel*
 
-The panel on the left shows, top to bottom: revision ID, status and author;
-title; reviewers (`✓` accepted, `✗` rejected, `!` blocking); base commit
-and diff ID; changed files; all inline threads; pending drafts; the recent
-timeline.
+The review opens in a new tab, which leaves the layout of the other tabs
+alone. The panel on the left shows, top to bottom: revision ID, status and
+author; title; reviewers (`✓` accepted, `✗` rejected, `!` blocking); base
+commit and diff ID; changed files; all inline threads; pending drafts; the
+recent timeline.
 
 File entries carry a status letter (`A`dded, `M`odified, `D`eleted,
 `R`enamed, `C`opied) followed by the number of published threads

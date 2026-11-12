@@ -74,16 +74,17 @@ Run `:help phorge-review` for the full documentation.
    Your branch, working tree and index do not change. The raw diff is cached, so the next
    review of the same diff does not fetch it again.
 
-2. The panel opens on the left with the revision's details, the changed files, all
-   inline comments, your drafts and the recent activity. Press `d` for the full
-   description.
+2. The review opens in a new tab, with the panel on the left showing the revision's
+   details, the changed files, all inline comments, your drafts and the recent activity.
+   Your other tabs keep their layout. Press `d` for the full description.
 
 3. Press `<CR>` on a file. The base version opens on the left and your real file on the
    right, in diff mode. The right-hand side is a normal buffer, so `gd`, references and
    hover all work. With `:Phab diff-only` the right-hand side is the real file when it
    has the revision's content, otherwise a read-only buffer without LSP. Use `zR` to
    unfold unchanged code and `]r` / `[r` to jump between comments. Opening another file
-   in the right-hand window (`:e`, `gf`, a picker) closes the base version.
+   in the right-hand window (`:e`, `gf`, a picker) closes the base version; coming back to
+   a changed file there (`<C-o>`, a picker) reopens it.
 
 4. To comment, press `<leader>rc` on a line or a visual selection, write your comment and
    save with `:w`. It is stored as a private draft on the server. Commenting on a line
@@ -135,7 +136,7 @@ The default branch is found automatically: `origin/HEAD`, then `origin/master`,
 | `:Phab browse`              | Open the comment under the cursor, or the revision, in the browser.                                                |
 | `:Phab refresh`             | Reload the review.                                                                                                 |
 | `:Phab help`                | List all keys.                                                                                                     |
-| `:Phab close`               | Close the review and remove all marks.                                                                             |
+| `:Phab close`               | Close the review tab and remove all marks.                                                                         |
 
 ## Keys
 
