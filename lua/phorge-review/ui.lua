@@ -8,6 +8,7 @@ local util = require('phorge-review.util')
 local M = {}
 
 local panel_ns = api.nvim_create_namespace('phorge-review.panel')
+local current_ns = api.nvim_create_namespace('phorge-review.current')
 
 local STATUS_HL = {
   M = 'PhorgeReviewChanged',
@@ -245,6 +246,20 @@ function M.help()
   return win
 end
 
+--- Highlights the panel row of the file open in the main window.
+local function mark_current_file()
+  local buf = state.panel_buf
+  if not buf_valid(buf) then
+    return
+  end
+  api.nvim_buf_clear_namespace(buf, current_ns, 0, -1)
+  for row, item in pairs(state.panel_items or {}) do
+    if item.kind == 'file' and item.file.path == state.current_file then
+      api.nvim_buf_set_extmark(buf, current_ns, row - 1, 0, { line_hl_group = 'PhorgeReviewCurrent' })
+    end
+  end
+end
+
 function M.render_panel()
   local buf = state.panel_buf
   if not buf_valid(buf) or not state.active() then
@@ -403,6 +418,7 @@ function M.render_panel()
     })
   end
   state.panel_items = items
+  mark_current_file()
 end
 
 function M.open_panel()
@@ -693,6 +709,7 @@ function M.open_file(file)
   close_base()
   detach_file_keys()
   state.current_file = file.path
+  mark_current_file()
   api.nvim_set_current_win(main)
   vim.cmd.diffoff()
 

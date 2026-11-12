@@ -277,6 +277,26 @@ return {
     end,
   },
   {
+    'highlights the panel row of the open file',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      local function marked()
+        local buf = state.panel_buf
+        local ns = vim.api.nvim_get_namespaces()['phorge-review.current']
+        local rows = vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, {})
+        return #rows == 1 and state.panel_items[rows[1][2] + 1].file.path
+      end
+      h.eq(false, marked())
+      ui.open_file(state.file_set['a.txt'])
+      h.eq('a.txt', marked())
+      ui.step_file(1)
+      h.eq('c.txt', marked())
+      require('phorge-review.ui').render_panel()
+      h.eq('c.txt', marked())
+    end,
+  },
+  {
     'continues the hunk keys in the next changed file and wraps around',
     function()
       h.feature_repo()

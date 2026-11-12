@@ -88,6 +88,7 @@ local function set_highlights()
     PhorgeReviewTitle = 'Title',
     PhorgeReviewSection = 'Special',
     PhorgeReviewDir = 'Directory',
+    PhorgeReviewCurrent = 'Visual',
   }
   for name, link in pairs(links) do
     vim.api.nvim_set_hl(0, name, { link = link, default = true })

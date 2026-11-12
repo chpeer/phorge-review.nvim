@@ -391,6 +391,7 @@ All groups are defined with `default` links and can be overridden.
   PhorgeReviewTitle         Title         panel header
   PhorgeReviewSection       Special       panel section headings
   PhorgeReviewDir           Directory     directories in the panel tree
+  PhorgeReviewCurrent       Visual        panel row of the open file
 
 *hl-PhorgeReviewAddedLine* *hl-PhorgeReviewChangedLine*
 *hl-PhorgeReviewDeleted*
