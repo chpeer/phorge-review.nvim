@@ -298,11 +298,12 @@ return {
     end,
   },
   {
-    'opens the first file of the panel in the new tab with the cursor in the panel',
+    'opens the first file of the panel in the new tab with the panel cursor on it',
     function()
       h.feature_repo()
       vim.cmd('Phab local')
       h.eq(state.panel_win, vim.api.nvim_get_current_win())
+      h.eq('a.txt', state.panel_items[vim.api.nvim_win_get_cursor(0)[1]].file.path)
       h.eq('a.txt', vim.fs.basename(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(state.main_win))))
       h.eq(true, vim.api.nvim_win_is_valid(state.base_win))
       vim.api.nvim_win_close(state.panel_win, true)

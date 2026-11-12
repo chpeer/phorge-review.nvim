@@ -376,13 +376,14 @@ function M.open_panel()
   state.panel_win = win
   M.render_panel()
   if new_tab then
-    -- A new tab shows the first file the panel lists, with the cursor in the
-    -- panel.
+    -- A new tab shows the first file the panel lists, with the panel cursor on
+    -- its entry.
     for row = 1, api.nvim_buf_line_count(state.panel_buf) do
       local item = state.panel_items[row]
       if item and item.kind == 'file' then
         M.open_file(item.file)
         api.nvim_set_current_win(state.panel_win)
+        api.nvim_win_set_cursor(state.panel_win, { row, 0 })
         break
       end
     end
