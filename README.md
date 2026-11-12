@@ -82,7 +82,7 @@ Run `:help phorge-review` for the full documentation.
    right, in diff mode. The right-hand side is a normal buffer, so `gd`, references and
    hover all work. With `:Phab diff-only` the right-hand side is the real file when it
    has the revision's content, otherwise a read-only buffer without LSP. Use `zR` to
-   unfold unchanged code, `<Tab>` / `<S-Tab>` to step through the changed files and
+   unfold unchanged code, `]f` / `[f` to step through the changed files and
    `]r` / `[r` to jump between comments, continuing in the next file with comments.
    Opening another file in the right-hand window (`:e`, `gf`, a picker) closes the base version.
 
@@ -134,6 +134,7 @@ The default branch is found automatically: `origin/HEAD`, then `origin/master`,
 | `:Phab toggle-comments`     | Hide or show inline comments.                                                                                      |
 | `:Phab files`               | Focus the panel.                                                                                                   |
 | `:Phab next-file` / `:Phab prev-file` | Open the next / previous changed file in panel order, wrapping around. |
+| `:Phab next-hunk` / `:Phab prev-hunk` | Jump to the next / previous hunk, continuing in the next / previous changed file with hunks. |
 | `:Phab description`         | Show the revision's summary, test plan and full timeline.                                                          |
 | `:Phab browse`              | Open the comment under the cursor, or the revision, in the browser.                                                |
 | `:Phab refresh`             | Reload the review.                                                                                                 |
@@ -157,8 +158,9 @@ closes:
 
 | Key                 | Action                                                                 |
 | ------------------- | ---------------------------------------------------------------------- |
-| `<Tab>` / `<S-Tab>` | Next / previous changed file, wrapping around                          |
+| `]f` / `[f`         | Next / previous changed file, wrapping around                          |
 | `]r` / `[r`         | Next / previous comment, continuing in the next / previous file; in the panel, next / previous thread or draft |
+| `]c` / `[c`         | Next / previous hunk, continuing in the next / previous changed file; review files only |
 
 You can change or disable all of them with the `keymaps` option. Each one is also
 available as a `<Plug>(phorge-review-<name>)` mapping, e.g.
@@ -204,10 +206,11 @@ require('phorge-review').setup({
   },
   panel_timeline = 8,   -- number of recent activity entries in the panel
   keymaps = {           -- set a key to false to skip it, or keymaps = false for none
-    next_file = '<Tab>', prev_file = '<S-Tab>',  -- buffer-local to the panel and review files
+    next_file = ']f', prev_file = '[f',  -- buffer-local to the panel and review files
     comment = '<leader>rc', submit = '<leader>rs', files = '<leader>rf',
     toggle_comments = '<leader>rt', browse = '<leader>rb',
     next = ']r', prev = '[r',  -- buffer-local to the panel and review files
+    next_hunk = ']c', prev_hunk = '[c',  -- buffer-local to the review files
   },
 })
 ```

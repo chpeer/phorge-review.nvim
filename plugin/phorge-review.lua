@@ -58,6 +58,13 @@ vim.keymap.set(
   '<Cmd>Phab prev-file<CR>',
   { desc = 'phorge-review: previous file' }
 )
+vim.keymap.set('n', '<Plug>(phorge-review-next-hunk)', '<Cmd>Phab next-hunk<CR>', { desc = 'phorge-review: next hunk' })
+vim.keymap.set(
+  'n',
+  '<Plug>(phorge-review-prev-hunk)',
+  '<Cmd>Phab prev-hunk<CR>',
+  { desc = 'phorge-review: previous hunk' }
+)
 vim.keymap.set('n', '<Plug>(phorge-review-files)', '<Cmd>Phab files<CR>', { desc = 'phorge-review: focus panel' })
 vim.keymap.set('n', '<Plug>(phorge-review-browse)', '<Cmd>Phab browse<CR>', { desc = 'phorge-review: open in browser' })
 require('phorge-review').apply_keymaps()

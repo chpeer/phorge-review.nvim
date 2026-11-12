@@ -352,6 +352,12 @@ local subcommands = {
   prev = function()
     comments.jump(-1)
   end,
+  ['next-hunk'] = function()
+    ui.step_hunk(1)
+  end,
+  ['prev-hunk'] = function()
+    ui.step_hunk(-1)
+  end,
 }
 
 function M.command(o)

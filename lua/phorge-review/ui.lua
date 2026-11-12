@@ -18,7 +18,14 @@ local STATUS_HL = {
 }
 
 --- Keymaps that are set on review buffers only, not globally.
-M.BUFFER_KEYMAPS = { next_file = true, prev_file = true, next = true, prev = true }
+M.BUFFER_KEYMAPS = {
+  next_file = true,
+  prev_file = true,
+  next = true,
+  prev = true,
+  next_hunk = true,
+  prev_hunk = true,
+}
 
 -- What each buffer-local keymap does.
 local BUFFER_ACTIONS = {
@@ -33,6 +40,12 @@ local BUFFER_ACTIONS = {
   end,
   prev = function()
     require('phorge-review.comments').jump(-1)
+  end,
+  next_hunk = function()
+    M.step_hunk(1)
+  end,
+  prev_hunk = function()
+    M.step_hunk(-1)
   end,
 }
 
@@ -133,6 +146,7 @@ local PANEL_ACTIONS = vim.tbl_extend('force', BUFFER_ACTIONS, {
     panel_jump(-1)
   end,
 })
+PANEL_ACTIONS.next_hunk, PANEL_ACTIONS.prev_hunk = nil, nil
 
 local function panel_keymaps(buf)
   local function map(lhs, fn, desc)
@@ -170,6 +184,8 @@ local ACTION_HELP = {
   { 'prev', 'previous comment, continuing in the previous file with comments' },
   { 'next_file', 'next changed file (review buffers only)' },
   { 'prev_file', 'previous changed file (review buffers only)' },
+  { 'next_hunk', 'next hunk, continuing in the next changed file (review buffers only)' },
+  { 'prev_hunk', 'previous hunk, continuing in the previous changed file (review buffers only)' },
   { 'toggle_comments', 'hide / show inline comments' },
   { 'browse', 'open thread or revision in the browser' },
   { 'files', 'focus the panel' },
@@ -521,6 +537,59 @@ function M.jump_comment_file(direction)
     end
   end
   util.notify('no comments in this review')
+end
+
+--- Sorted first lines of the hunks of `file`, on the base side or else the
+--- working tree side.
+local function hunk_lines(file, base_side)
+  local lines = {}
+  for _, h in ipairs(git.hunks(state.root, state.base, file.path)) do
+    lines[#lines + 1] = math.max(base_side and h.old_start or h.new_start, 1)
+  end
+  -- Untracked files are absent from the diff against the base.
+  if #lines == 0 and file.status == 'A' then
+    lines[1] = 1
+  end
+  table.sort(lines)
+  return lines
+end
+
+--- Moves to the next (`direction` 1) or previous (-1) hunk of the current file.
+--- Past the last (before the first) one, opens the next (previous) changed file
+--- with hunks in panel order, wrapping around, at its first (last) hunk.
+function M.step_hunk(direction)
+  if not state.active() then
+    return util.notify('no review open; run :Phab [D123] first', vim.log.levels.WARN)
+  end
+  local files = ordered_files()
+  local current = 0
+  for i, f in ipairs(files) do
+    if f.path == state.current_file then
+      current = i
+    end
+  end
+  if current > 0 then
+    local row = api.nvim_win_get_cursor(0)[1]
+    local lines = hunk_lines(files[current], api.nvim_get_current_buf() == state.base_buf)
+    for i = direction > 0 and 1 or #lines, direction > 0 and #lines or 1, direction do
+      if (lines[i] - row) * direction > 0 then
+        return api.nvim_win_set_cursor(0, { math.min(lines[i], api.nvim_buf_line_count(0)), 0 })
+      end
+    end
+  else
+    current = direction > 0 and 0 or #files + 1
+  end
+  for i = 1, #files do
+    local file = files[(current - 1 + direction * i) % #files + 1]
+    local lines = hunk_lines(file, file.status == 'D')
+    if #lines > 0 then
+      M.open_file(file)
+      local row = direction > 0 and lines[1] or lines[#lines]
+      api.nvim_win_set_cursor(0, { math.min(row, api.nvim_buf_line_count(0)), 0 })
+      return vim.cmd('normal! zz')
+    end
+  end
+  util.notify('no more hunks in this review')
 end
 
 -- File / diff windows ---------------------------------------------------------

@@ -83,8 +83,8 @@ Defaults: >lua
       },
       panel_timeline = 8,
       keymaps = {
-        next_file = '<Tab>',
-        prev_file = '<S-Tab>',
+        next_file = ']f',
+        prev_file = '[f',
         comment = '<leader>rc',
         submit = '<leader>rs',
         files = '<leader>rf',
@@ -92,6 +92,8 @@ Defaults: >lua
         browse = '<leader>rb',
         next = ']r',
         prev = '[r',
+        next_hunk = ']c',
+        prev_hunk = '[c',
       },
     }
 <
@@ -228,6 +230,15 @@ keymaps ~
     previous thread or draft entry. Bound to `]r` / `[r` in the panel and the
     review's file and base buffers only.
 
+                                                          *:Phab-next-hunk*
+                                                          *:Phab-prev-hunk*
+:Phab next-hunk
+:Phab prev-hunk
+    Jump to the next / previous hunk of the current file. After the last /
+    before the first one, continue in the next / previous changed file with
+    hunks in panel order, wrapping around. Bound to `]c` / `[c` in the
+    review's file and base buffers only.
+
                                                        *:Phab-toggle-comments*
 :Phab toggle-comments
     Hide or show rendered inline comments in all buffers. While hidden the
@@ -241,7 +252,7 @@ keymaps ~
 :Phab next-file
 :Phab prev-file
     Open the next / previous changed file in panel order, wrapping around.
-    Bound to `<Tab>` / `<S-Tab>` in the panel and in the review's file and
+    Bound to `]f` / `[f` in the panel and in the review's file and
     base buffers only; the keys are removed when the review closes.
 
                                                                 *:Phab-browse*
@@ -297,6 +308,8 @@ The following |<Plug>| mappings are always defined:
   <Plug>(phorge-review-prev-file)  |:Phab-prev-file|
   <Plug>(phorge-review-next)      |:Phab-next|
   <Plug>(phorge-review-prev)      |:Phab-prev|
+  <Plug>(phorge-review-next-hunk)  |:Phab-next-hunk|
+  <Plug>(phorge-review-prev-hunk)  |:Phab-prev-hunk|
 
 By default they are bound to the keys listed under
 |phorge-review-option-keymaps|.
@@ -319,7 +332,7 @@ Keys in the panel:
 
   <CR> / o / <2-LeftMouse>
              open file; fold / unfold directory; jump to thread
-  <Tab> / <S-Tab>
+  ]f / [f
              |:Phab-next-file| / |:Phab-prev-file|
   ]r / [r    next / previous thread or draft entry
   d          |:Phab-description|
@@ -345,7 +358,7 @@ Files of the working tree that already have the revision's content open as
 real files.
 
 Then: open files from the panel (`<CR>`), navigate with LSP as usual in the
-right-hand window, `zR` to open folded context, `<Tab>` / `<S-Tab>` to step
+right-hand window, `zR` to open folded context, `]f` / `[f` to step
 through the changed files, `]r` / `[r` to jump between existing threads across
 files, `<leader>rc` to comment or reply (saved as a draft on
 `:w`), `<leader>rs` to publish all drafts with an overall message and

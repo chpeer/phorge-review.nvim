@@ -277,6 +277,26 @@ return {
     end,
   },
   {
+    'continues the hunk keys in the next changed file and wraps around',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['a.txt'])
+      vim.api.nvim_win_set_cursor(0, { 1, 0 })
+      local function key(lhs)
+        vim.cmd('normal ' .. lhs)
+        return { state.current_file, vim.api.nvim_win_get_cursor(0)[1] }
+      end
+      h.eq({ 'a.txt', 2 }, key(']c'))
+      h.eq({ 'c.txt', 1 }, key(']c'))
+      h.eq({ 'd.txt', 1 }, key(']c'))
+      h.eq({ 'new.txt', 1 }, key(']c'))
+      h.eq({ 'a.txt', 2 }, key(']c'))
+      h.eq({ 'new.txt', 1 }, key('[c'))
+      h.eq({ 'd.txt', 1 }, key('[c'))
+    end,
+  },
+  {
     'binds the file keys only in review buffers until the review closes',
     function()
       local function has_key(buf, lhs)
@@ -288,21 +308,21 @@ return {
       vim.cmd('Phab local')
       ui.open_file(state.file_set['a.txt'])
       local first = vim.api.nvim_get_current_buf()
-      h.eq({ true, true }, { has_key(first, '<Tab>'), has_key(first, ']r') })
+      h.eq({ true, true }, { has_key(first, ']f'), has_key(first, ']r') })
       ui.open_file(state.file_set['c.txt'])
-      h.eq({ false, false }, { has_key(first, '<Tab>'), has_key(first, ']r') })
+      h.eq({ false, false }, { has_key(first, ']f'), has_key(first, ']r') })
       local other = vim.api.nvim_create_buf(true, false)
       h.eq(
         '',
         vim.api.nvim_buf_call(other, function()
-          return vim.fn.maparg('<S-Tab>', 'n')
+          return vim.fn.maparg('[f', 'n')
         end)
       )
       vim.cmd('Phab close')
       h.eq(
         '',
         vim.api.nvim_buf_call(vim.fn.bufnr('c.txt'), function()
-          return vim.fn.maparg('<Tab>', 'n')
+          return vim.fn.maparg(']f', 'n')
         end)
       )
     end,
