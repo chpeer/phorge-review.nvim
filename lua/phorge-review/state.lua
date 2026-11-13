@@ -10,6 +10,7 @@ function M.reset()
   M.file_set = {} -- path -> file
   M.drafts = {} -- path -> list of unsubmitted inline threads
   M.hidden = false -- inline comments hidden
+  M.tabpage = nil -- tabpage holding the review windows
   M.panel_buf = nil
   M.panel_win = nil
   M.panel_items = {}

@@ -33,10 +33,11 @@ local function buf_valid(buf)
   return buf and api.nvim_buf_is_valid(buf)
 end
 
---- A window suitable for showing review files: not the panel or base split,
---- not floating, not a terminal/prompt/quickfix window.
+--- A window of the review tab suitable for showing review files: not the panel
+--- or base split, not floating, not a terminal/prompt/quickfix window.
 local function is_file_win(win)
   return win_valid(win)
+    and api.nvim_win_get_tabpage(win) == state.tabpage
     and win ~= state.panel_win
     and win ~= state.base_win
     and api.nvim_win_get_config(win).relative == ''
@@ -337,6 +338,15 @@ function M.open_panel()
     api.nvim_set_current_win(state.panel_win)
     return
   end
+  local new_tab = not (state.tabpage and api.nvim_tabpage_is_valid(state.tabpage))
+  if not new_tab then
+    api.nvim_set_current_tabpage(state.tabpage)
+  else
+    -- The review gets its own tab so that it leaves the layout of the others
+    -- alone; closing the review closes the tab.
+    vim.cmd('tab split')
+    state.tabpage = api.nvim_get_current_tabpage()
+  end
   local cur = api.nvim_get_current_win()
   if is_file_win(cur) then
     state.main_win = cur
@@ -365,6 +375,19 @@ function M.open_panel()
   vim.wo[win].spell = false
   state.panel_win = win
   M.render_panel()
+  if new_tab then
+    -- A new tab shows the first file the panel lists, with the panel cursor on
+    -- its entry.
+    for row = 1, api.nvim_buf_line_count(state.panel_buf) do
+      local item = state.panel_items[row]
+      if item and item.kind == 'file' then
+        M.open_file(item.file)
+        api.nvim_set_current_win(state.panel_win)
+        api.nvim_win_set_cursor(state.panel_win, { row, 0 })
+        break
+      end
+    end
+  end
 end
 
 function M.panel_select()
@@ -395,7 +418,7 @@ local function main_win()
   if is_file_win(state.main_win) then
     return state.main_win
   end
-  for _, win in ipairs(api.nvim_tabpage_list_wins(0)) do
+  for _, win in ipairs(api.nvim_tabpage_list_wins(state.tabpage)) do
     if is_file_win(win) then
       state.main_win = win
       return win
@@ -443,6 +466,33 @@ local function base_buffer(win, path, content, revision)
     vim.bo[buf].filetype = ft
   end
   return buf
+end
+
+--- Shows `base_content`, the base version of `file`, in a diff split left of
+--- `main`, the current window, which shows `file_buf`.
+local function diff_split(main, file, file_buf, base_content)
+  vim.cmd('leftabove vsplit')
+  local win = api.nvim_get_current_win()
+  local buf = base_buffer(win, file.old_path or file.path, base_content)
+  vim.cmd.diffthis()
+  state.base_win, state.base_buf = win, buf
+  api.nvim_set_current_win(main)
+  vim.cmd.diffthis()
+  if not config.options.diff_folds then
+    vim.wo[win].foldenable = false
+    vim.wo[main].foldenable = false
+  end
+  -- 'diff' is window-local: once the main window shows another buffer (:e,
+  -- gf, a picker), drop the split so it is not diffed against this base.
+  api.nvim_create_autocmd('BufWinEnter', {
+    group = diff_group,
+    callback = function(ev)
+      if api.nvim_get_current_win() == main and ev.buf ~= file_buf then
+        close_base()
+        vim.cmd.diffoff()
+      end
+    end,
+  })
 end
 
 --- Opens `file` (an entry of `model.files`, see review.lua) in the main
@@ -502,35 +552,46 @@ function M.open_file(file)
   end
 
   if config.options.diff_split and base_content then
-    vim.cmd('leftabove vsplit')
-    local win = api.nvim_get_current_win()
-    local buf = base_buffer(win, file.old_path or file.path, base_content)
-    vim.cmd.diffthis()
-    state.base_win, state.base_buf = win, buf
-    api.nvim_set_current_win(main)
-    vim.cmd.diffthis()
-    if not config.options.diff_folds then
-      vim.wo[win].foldenable = false
-      vim.wo[main].foldenable = false
-    end
+    diff_split(main, file, file_buf, base_content)
     -- `]c` moves to the next change after the cursor, skipping one on line 1.
     vim.cmd('normal! gg')
     if vim.fn.diff_hlID(1, 1) == 0 then
       vim.cmd('normal! ]c')
     end
-    -- 'diff' is window-local: once the main window shows another buffer (:e,
-    -- gf, a picker), drop the split so it is not diffed against this base.
-    api.nvim_create_autocmd('BufWinEnter', {
-      group = diff_group,
-      callback = function(ev)
-        if api.nvim_get_current_win() == main and ev.buf ~= file_buf then
-          close_base()
-          vim.cmd.diffoff()
-        end
-      end,
-    })
   end
   require('phorge-review.comments').refresh_buf(file_buf)
+end
+
+--- Rebuilds the diff split when a changed file of the review comes back to the
+--- main window without it, e.g. with <C-o> after jumping to another file.
+function M.reopen_split(buf)
+  if M.opening or not config.options.diff_split or api.nvim_get_current_win() ~= state.main_win then
+    return
+  end
+  local path = require('phorge-review.comments').relpath(buf)
+  local file = path and state.file_set[path]
+  if not file or file.status == 'A' or file.status == 'D' then
+    return
+  end
+  local main = state.main_win
+  -- Scheduled: the BufWinEnter that drops the split of the previous file runs
+  -- after this one, and splitting during a jump is unreliable.
+  vim.schedule(function()
+    if
+      not state.active()
+      or win_valid(state.base_win)
+      or api.nvim_get_current_win() ~= main
+      or api.nvim_win_get_buf(main) ~= buf
+    then
+      return
+    end
+    local base_content = git.show(state.root, state.base, file.old_path or file.path)
+    if base_content then
+      local view = vim.fn.winsaveview()
+      diff_split(main, file, buf, base_content)
+      vim.fn.winrestview(view)
+    end
+  end)
 end
 
 -- Description -----------------------------------------------------------------
@@ -607,8 +668,14 @@ end
 
 function M.close()
   close_base()
-  if win_valid(state.panel_win) and #api.nvim_tabpage_list_wins(0) > 1 then
-    api.nvim_win_close(state.panel_win, true)
+  -- Cleared first so that the TabClosed autocommand does not close again.
+  local tab = state.tabpage
+  state.tabpage = nil
+  if tab and vim.tbl_contains(api.nvim_list_tabpages(), tab) then
+    if #api.nvim_list_tabpages() == 1 then
+      vim.cmd('tabnew')
+    end
+    vim.cmd(('tabclose! %d'):format(api.nvim_tabpage_get_number(tab)))
   end
   if buf_valid(state.panel_buf) then
     api.nvim_buf_delete(state.panel_buf, { force = true })
