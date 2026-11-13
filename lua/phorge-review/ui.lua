@@ -8,6 +8,7 @@ local util = require('phorge-review.util')
 local M = {}
 
 local panel_ns = api.nvim_create_namespace('phorge-review.panel')
+local current_ns = api.nvim_create_namespace('phorge-review.current')
 
 local STATUS_HL = {
   M = 'PhorgeReviewChanged',
@@ -15,6 +16,38 @@ local STATUS_HL = {
   D = 'PhorgeReviewDeleted',
   R = 'PhorgeReviewChanged',
   C = 'PhorgeReviewAdded',
+}
+
+--- Keymaps that are set on review buffers only, not globally.
+M.BUFFER_KEYMAPS = {
+  next_file = true,
+  prev_file = true,
+  next = true,
+  prev = true,
+  next_hunk = true,
+  prev_hunk = true,
+}
+
+-- What each buffer-local keymap does.
+local BUFFER_ACTIONS = {
+  next_file = function()
+    M.step_file(1)
+  end,
+  prev_file = function()
+    M.step_file(-1)
+  end,
+  next = function()
+    require('phorge-review.comments').jump(1)
+  end,
+  prev = function()
+    require('phorge-review.comments').jump(-1)
+  end,
+  next_hunk = function()
+    M.step_hunk(1)
+  end,
+  prev_hunk = function()
+    M.step_hunk(-1)
+  end,
 }
 
 local REVIEWER_MARK = {
@@ -90,12 +123,39 @@ function M.file_tree(files)
   return root
 end
 
+--- Moves the panel cursor to the next (`direction` 1) or previous (-1) thread
+--- or draft entry.
+local function panel_jump(direction)
+  local row = api.nvim_win_get_cursor(0)[1] + direction
+  while row >= 1 and row <= api.nvim_buf_line_count(0) do
+    local item = state.panel_items[row]
+    if item and item.kind == 'thread' then
+      return api.nvim_win_set_cursor(0, { row, 0 })
+    end
+    row = row + direction
+  end
+  util.notify('no more comments in the panel')
+end
+
+-- The buffer-local keymaps of the panel; `next` and `prev` move between its
+-- thread entries instead of the comments of a file.
+local PANEL_ACTIONS = vim.tbl_extend('force', BUFFER_ACTIONS, {
+  next = function()
+    panel_jump(1)
+  end,
+  prev = function()
+    panel_jump(-1)
+  end,
+})
+PANEL_ACTIONS.next_hunk, PANEL_ACTIONS.prev_hunk = nil, nil
+
 local function panel_keymaps(buf)
   local function map(lhs, fn, desc)
     vim.keymap.set('n', lhs, fn, { buffer = buf, nowait = true, desc = 'phorge-review: ' .. desc })
   end
   map('<CR>', M.panel_select, 'open item under cursor')
   map('o', M.panel_select, 'open item under cursor')
+  map('<2-LeftMouse>', M.panel_select, 'open item under cursor')
   map('d', M.description, 'show description')
   map('s', function()
     require('phorge-review.comments').submit()
@@ -109,14 +169,24 @@ local function panel_keymaps(buf)
   map('q', function()
     require('phorge-review').close()
   end, 'close review')
-  map('?', M.help, 'show help')
+  map('g?', M.help, 'show help')
+  for name, action in pairs(PANEL_ACTIONS) do
+    local lhs = config.options.keymaps and config.options.keymaps[name]
+    if lhs then
+      map(lhs, action, name:gsub('_', ' '))
+    end
+  end
 end
 
 local ACTION_HELP = {
   { 'comment', 'comment on line / visual selection (reply when on a thread)' },
   { 'submit', 'publish drafts with a message and action' },
-  { 'next', 'next comment in buffer' },
-  { 'prev', 'previous comment in buffer' },
+  { 'next', 'next comment, continuing in the next file with comments' },
+  { 'prev', 'previous comment, continuing in the previous file with comments' },
+  { 'next_file', 'next changed file (review buffers only)' },
+  { 'prev_file', 'previous changed file (review buffers only)' },
+  { 'next_hunk', 'next hunk, continuing in the next changed file (review buffers only)' },
+  { 'prev_hunk', 'previous hunk, continuing in the previous changed file (review buffers only)' },
   { 'toggle_comments', 'hide / show inline comments' },
   { 'browse', 'open thread or revision in the browser' },
   { 'files', 'focus the panel' },
@@ -134,13 +204,13 @@ function M.help()
     '',
     'Panel keys',
     '',
-    '  <CR> / o     open file, fold directory, jump to thread',
+    '  <CR> / o     open file, fold directory, jump to thread (or double-click)',
     '  d            description, test plan and timeline',
     '  s            submit review',
     '  t            toggle inline comments',
     '  R            refresh',
     '  q            close review',
-    '  ?            this help',
+    '  g?           this help',
     '',
     'Editors: :w or <C-s> sends, q cancels.   Full docs: :help phorge-review',
   })
@@ -172,8 +242,22 @@ function M.help()
     end
   end
   vim.keymap.set('n', 'q', '<Cmd>close<CR>', { buffer = buf, nowait = true })
-  vim.keymap.set('n', '?', '<Cmd>close<CR>', { buffer = buf, nowait = true })
+  vim.keymap.set('n', 'g?', '<Cmd>close<CR>', { buffer = buf, nowait = true })
   return win
+end
+
+--- Highlights the panel row of the file open in the main window.
+local function mark_current_file()
+  local buf = state.panel_buf
+  if not buf_valid(buf) then
+    return
+  end
+  api.nvim_buf_clear_namespace(buf, current_ns, 0, -1)
+  for row, item in pairs(state.panel_items or {}) do
+    if item.kind == 'file' and item.file.path == state.current_file then
+      api.nvim_buf_set_extmark(buf, current_ns, row - 1, 0, { line_hl_group = 'PhorgeReviewCurrent' })
+    end
+  end
 end
 
 function M.render_panel()
@@ -276,7 +360,12 @@ function M.render_panel()
     for _, it in ipairs(threads) do
       local c = it.thread.comments[1]
       add(
-        ('  %s:%d %s: %s'):format(vim.fs.basename(it.path), it.thread.line, c.author, util.one_line(c.text, 60)),
+        ('  %s:%d %s: %s'):format(
+          vim.fs.basename(it.path),
+          it.thread.line,
+          util.display_author(c.author),
+          util.one_line(c.text, 60)
+        ),
         { kind = 'thread', path = it.path, thread = it.thread },
         it.thread.done and 'PhorgeReviewDone' or nil
       )
@@ -299,21 +388,23 @@ function M.render_panel()
 
   if m.is_local then
     add('')
-    add('<CR> open · s copy review · R refresh · q close · ? help', nil, 'PhorgeReviewMeta')
+    add('<CR> open · s copy review', nil, 'PhorgeReviewMeta')
+    add('R refresh · q close · g? help', nil, 'PhorgeReviewMeta')
   else
     section('Timeline')
     local first = math.max(1, #m.timeline - config.options.panel_timeline + 1)
     for i = first, #m.timeline do
       local e = m.timeline[i]
       add(
-        ('  %s %s'):format(e.author, e.action or util.one_line(e.text, 60)),
+        ('  %s %s'):format(util.display_author(e.author), e.action or util.one_line(e.text, 60)),
         { kind = 'description' },
         e.action and 'PhorgeReviewMeta' or nil
       )
     end
 
     add('')
-    add('<CR> open · d description · s submit · R refresh · q close · ? help', nil, 'PhorgeReviewMeta')
+    add('<CR> open · d description · s submit', nil, 'PhorgeReviewMeta')
+    add('R refresh · q close · g? help', nil, 'PhorgeReviewMeta')
   end
 
   vim.bo[buf].modifiable = true
@@ -327,6 +418,7 @@ function M.render_panel()
     })
   end
   state.panel_items = items
+  mark_current_file()
 end
 
 function M.open_panel()
@@ -389,6 +481,133 @@ function M.panel_select()
   end
 end
 
+--- The changed files in the order the panel lists them.
+local function ordered_files()
+  if not config.options.panel.tree then
+    return state.files
+  end
+  local list = {}
+  local function walk(node)
+    for _, dir in ipairs(node.dirs) do
+      walk(dir)
+    end
+    vim.list_extend(list, node.files)
+  end
+  walk(M.file_tree(state.files))
+  return list
+end
+
+--- Opens the file `step` positions after the current one in panel order,
+--- wrapping around.
+function M.step_file(step)
+  if not state.active() then
+    return util.notify('no review open; run :Phab [D123] first', vim.log.levels.WARN)
+  end
+  local files = ordered_files()
+  if #files == 0 then
+    return
+  end
+  local idx
+  for i, f in ipairs(files) do
+    if f.path == state.current_file then
+      idx = i
+    end
+  end
+  idx = idx and (idx - 1 + step) % #files + 1 or (step > 0 and 1 or #files)
+  M.open_file(files[idx])
+end
+
+--- Sorted lines of the published threads and drafts in `path`.
+local function comment_lines(path)
+  local lines = {}
+  for _, list in ipairs({ state.model.inlines[path] or {}, state.drafts[path] or {} }) do
+    for _, t in ipairs(list) do
+      lines[#lines + 1] = t.line
+    end
+  end
+  table.sort(lines)
+  return lines
+end
+
+--- Opens the next (`direction` 1) or previous (-1) file in panel order that has
+--- comments, wrapping around, and moves to its first (last) comment.
+function M.jump_comment_file(direction)
+  local files = ordered_files()
+  local current = 0
+  for i, f in ipairs(files) do
+    if f.path == state.current_file then
+      current = i
+    end
+  end
+  if current == 0 then
+    current = direction > 0 and 0 or #files + 1
+  end
+  for i = 1, #files do
+    local file = files[(current - 1 + direction * i) % #files + 1]
+    local lines = comment_lines(file.path)
+    if #lines > 0 then
+      M.open_file(file)
+      local row = direction > 0 and lines[1] or lines[#lines]
+      api.nvim_win_set_cursor(0, { math.min(row, api.nvim_buf_line_count(0)), 0 })
+      return vim.cmd('normal! zz')
+    end
+  end
+  util.notify('no comments in this review')
+end
+
+--- Sorted first lines of the hunks of `file`, on the base side or else the
+--- working tree side.
+local function hunk_lines(file, base_side)
+  local lines = {}
+  for _, h in ipairs(git.hunks(state.root, state.base, file.path)) do
+    lines[#lines + 1] = math.max(base_side and h.old_start or h.new_start, 1)
+  end
+  -- Untracked files are absent from the diff against the base.
+  if #lines == 0 and file.status == 'A' then
+    lines[1] = 1
+  end
+  table.sort(lines)
+  return lines
+end
+
+--- Moves to the next (`direction` 1) or previous (-1) hunk of the current file.
+--- Past the last (before the first) one, opens the next (previous) changed file
+--- with hunks in panel order, wrapping around, at its first (last) hunk.
+function M.step_hunk(direction)
+  if not state.active() then
+    return util.notify('no review open; run :Phab [D123] first', vim.log.levels.WARN)
+  end
+  local files = ordered_files()
+  local current = 0
+  for i, f in ipairs(files) do
+    if f.path == state.current_file then
+      current = i
+    end
+  end
+  if current > 0 then
+    local row = api.nvim_win_get_cursor(0)[1]
+    local lines = hunk_lines(files[current], api.nvim_get_current_buf() == state.base_buf)
+    for i = direction > 0 and 1 or #lines, direction > 0 and #lines or 1, direction do
+      if (lines[i] - row) * direction > 0 then
+        return api.nvim_win_set_cursor(0, { math.min(lines[i], api.nvim_buf_line_count(0)), 0 })
+      end
+    end
+  else
+    current = direction > 0 and 0 or #files + 1
+  end
+  for i = 1, #files do
+    local file = files[(current - 1 + direction * i) % #files + 1]
+    local lines = hunk_lines(file, file.status == 'D')
+    if #lines > 0 then
+      M.open_file(file)
+      local row = direction > 0 and lines[1] or lines[#lines]
+      api.nvim_win_set_cursor(0, { math.min(row, api.nvim_buf_line_count(0)), 0 })
+      return vim.cmd('normal! zz')
+    end
+  end
+  util.notify('no more hunks in this review')
+end
+
 -- File / diff windows ---------------------------------------------------------
 
 local function main_win()
@@ -406,6 +625,40 @@ local function main_win()
   vim.cmd('wincmd =')
   state.main_win = api.nvim_get_current_win()
   return state.main_win
+end
+
+--- Binds the buffer-local keys in `buf`.
+local function attach_file_keys(buf)
+  local keymaps = config.options.keymaps
+  if not keymaps or not buf_valid(buf) or state.file_key_bufs[buf] then
+    return
+  end
+  local lhss = {}
+  for name, action in pairs(BUFFER_ACTIONS) do
+    local lhs = keymaps[name]
+    if lhs then
+      vim.keymap.set('n', lhs, action, {
+        buffer = buf,
+        silent = true,
+        nowait = true,
+        desc = 'phorge-review: ' .. name:gsub('_', ' '),
+      })
+      lhss[#lhss + 1] = lhs
+    end
+  end
+  state.file_key_bufs[buf] = lhss
+end
+
+--- Removes the buffer-local keys from every buffer that holds them.
+local function detach_file_keys()
+  for buf, lhss in pairs(state.file_key_bufs) do
+    if buf_valid(buf) then
+      for _, lhs in ipairs(lhss) do
+        pcall(api.nvim_buf_del_keymap, buf, 'n', lhs)
+      end
+    end
+    state.file_key_bufs[buf] = nil
+  end
 end
 
 local diff_group = api.nvim_create_augroup('phorge-review.diff', { clear = true })
@@ -442,6 +695,7 @@ local function base_buffer(win, path, content, revision)
   if ft then
     vim.bo[buf].filetype = ft
   end
+  attach_file_keys(buf)
   return buf
 end
 
@@ -453,6 +707,9 @@ function M.open_file(file)
   end
   local main = main_win()
   close_base()
+  detach_file_keys()
+  state.current_file = file.path
+  mark_current_file()
   api.nvim_set_current_win(main)
   vim.cmd.diffoff()
 
@@ -485,6 +742,7 @@ function M.open_file(file)
     file_buf = api.nvim_get_current_buf()
   end
   M.opening = false
+  attach_file_keys(file_buf)
   if
     not state.model.is_local
     and not state.tree
@@ -525,6 +783,7 @@ function M.open_file(file)
       callback = function(ev)
         if api.nvim_get_current_win() == main and ev.buf ~= file_buf then
           close_base()
+          detach_file_keys()
           vim.cmd.diffoff()
         end
       end,
@@ -561,10 +820,10 @@ local function description_lines(m)
   lines[#lines + 1] = ''
   for _, e in ipairs(m.timeline) do
     if e.action then
-      lines[#lines + 1] = ('- %s **%s** %s'):format(util.fmt_date(e.date), e.author, e.action)
+      lines[#lines + 1] = ('- %s **%s** %s'):format(util.fmt_date(e.date), util.display_author(e.author), e.action)
     else
       local body = vim.split(e.text, '\n', { plain = true })
-      lines[#lines + 1] = ('- %s **%s**: %s'):format(util.fmt_date(e.date), e.author, body[1])
+      lines[#lines + 1] = ('- %s **%s**: %s'):format(util.fmt_date(e.date), util.display_author(e.author), body[1])
       for i = 2, #body do
         lines[#lines + 1] = '  ' .. body[i]
       end
@@ -607,6 +866,7 @@ end
 
 function M.close()
   close_base()
+  detach_file_keys()
   if win_valid(state.panel_win) and #api.nvim_tabpage_list_wins(0) > 1 then
     api.nvim_win_close(state.panel_win, true)
   end

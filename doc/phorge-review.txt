@@ -83,6 +83,8 @@ Defaults: >lua
       },
       panel_timeline = 8,
       keymaps = {
+        next_file = ']f',
+        prev_file = '[f',
         comment = '<leader>rc',
         submit = '<leader>rs',
         files = '<leader>rf',
@@ -90,6 +92,8 @@ Defaults: >lua
         browse = '<leader>rb',
         next = ']r',
         prev = '[r',
+        next_hunk = ']c',
+        prev_hunk = '[c',
       },
     }
 <
@@ -160,10 +164,12 @@ panel_timeline ~
 
                                                 *phorge-review-option-keymaps*
 keymaps ~
-    Global keys bound to the |phorge-review-plug| mappings. Set an individual
-    entry to `false` to leave that action unbound, or the whole table to
-    `false` to define no global keys. `comment` is bound in normal and
-    visual mode, the rest in normal mode.
+    Keys bound to the |phorge-review-plug| mappings. Set an individual entry
+    to `false` to leave that action unbound, or the whole table to `false` to
+    define no keys. `comment` is bound in normal and visual mode, the rest in
+    normal mode. `next_file`, `prev_file`, `next` and `prev` are buffer-local
+    to the panel and the review's buffers; they are removed when the review
+    closes. The rest are global.
 
 ==============================================================================
 5. COMMANDS                                           *phorge-review-commands*
@@ -200,7 +206,8 @@ keymaps ~
     To reply to an existing thread, comment on its line: Conduit has no
     reply parameter, so the new inline is created on the same line and
     Phabricator shows it under the thread. The editor title indicates
-    whom you are replying to.
+    whom you are replying to. Comments whose author equals `$USER` are shown
+    as `you`.
 
                                                                 *:Phab-submit*
 :Phab submit
@@ -217,7 +224,20 @@ keymaps ~
                                                                   *:Phab-prev*
 :Phab next
 :Phab prev
-    Jump to the next / previous commented line in the current buffer.
+    Jump to the next / previous commented line in the current buffer. After
+    the last / before the first one, continue in the next / previous file with
+    comments in panel order, wrapping around. In the panel, jump to the next /
+    previous thread or draft entry. Bound to `]r` / `[r` in the panel and the
+    review's file and base buffers only.
+
+                                                          *:Phab-next-hunk*
+                                                          *:Phab-prev-hunk*
+:Phab next-hunk
+:Phab prev-hunk
+    Jump to the next / previous hunk of the current file. After the last /
+    before the first one, continue in the next / previous changed file with
+    hunks in panel order, wrapping around. Bound to `]c` / `[c` in the
+    review's file and base buffers only.
 
                                                        *:Phab-toggle-comments*
 :Phab toggle-comments
@@ -228,6 +248,13 @@ keymaps ~
 :Phab files
     Focus the panel, opening it if needed.
 
+                                                            *:Phab-next-file*
+:Phab next-file
+:Phab prev-file
+    Open the next / previous changed file in panel order, wrapping around.
+    Bound to `]f` / `[f` in the panel and in the review's file and
+    base buffers only; the keys are removed when the review closes.
+
                                                                 *:Phab-browse*
 :Phab browse
     Open the thread under the cursor in the browser (anchored to the inline
@@ -237,8 +264,8 @@ keymaps ~
 
                                                                   *:Phab-help*
 :Phab help
-    Show the currently configured global keys and the panel keys in a
-    floating window. Also `?` in the panel.
+    Show the currently configured keys and the panel keys in a floating
+    window. Also `g?` in the panel.
 
                                                                *:Phab-refresh*
 :Phab refresh
@@ -277,8 +304,12 @@ The following |<Plug>| mappings are always defined:
   <Plug>(phorge-review-files)     |:Phab-files|
   <Plug>(phorge-review-toggle-comments)  |:Phab-toggle-comments|
   <Plug>(phorge-review-browse)    |:Phab-browse|
+  <Plug>(phorge-review-next-file)  |:Phab-next-file|
+  <Plug>(phorge-review-prev-file)  |:Phab-prev-file|
   <Plug>(phorge-review-next)      |:Phab-next|
   <Plug>(phorge-review-prev)      |:Phab-prev|
+  <Plug>(phorge-review-next-hunk)  |:Phab-next-hunk|
+  <Plug>(phorge-review-prev-hunk)  |:Phab-prev-hunk|
 
 By default they are bound to the keys listed under
 |phorge-review-option-keymaps|.
@@ -299,13 +330,17 @@ File entries carry a status letter (`A`dded, `M`odified, `D`eleted,
 
 Keys in the panel:
 
-  <CR> / o   open file; fold / unfold directory; jump to thread
+  <CR> / o / <2-LeftMouse>
+             open file; fold / unfold directory; jump to thread
+  ]f / [f
+             |:Phab-next-file| / |:Phab-prev-file|
+  ]r / [r    next / previous thread or draft entry
   d          |:Phab-description|
   s          |:Phab-submit|
   t          |:Phab-toggle-comments|
   R          |:Phab-refresh|
   q          |:Phab-close|
-  ?          |:Phab-help|
+  g?         |:Phab-help|
 
 ==============================================================================
 8. WORKFLOW                                           *phorge-review-workflow*
@@ -323,8 +358,9 @@ Files of the working tree that already have the revision's content open as
 real files.
 
 Then: open files from the panel (`<CR>`), navigate with LSP as usual in the
-right-hand window, `zR` to open folded context, `]r` / `[r` to jump between
-existing threads, `<leader>rc` to comment or reply (saved as a draft on
+right-hand window, `zR` to open folded context, `]f` / `[f` to step
+through the changed files, `]r` / `[r` to jump between existing threads across
+files, `<leader>rc` to comment or reply (saved as a draft on
 `:w`), `<leader>rs` to publish all drafts with an overall message and
 action, and `q` in the panel when done. Afterwards switch back to your
 branch and delete `arcpatch-D123`.
@@ -355,6 +391,7 @@ All groups are defined with `default` links and can be overridden.
   PhorgeReviewTitle         Title         panel header
   PhorgeReviewSection       Special       panel section headings
   PhorgeReviewDir           Directory     directories in the panel tree
+  PhorgeReviewCurrent       Visual        panel row of the open file
 
 *hl-PhorgeReviewAddedLine* *hl-PhorgeReviewChangedLine*
 *hl-PhorgeReviewDeleted*

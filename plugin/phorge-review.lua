@@ -51,6 +51,20 @@ vim.keymap.set(
   { desc = 'phorge-review: toggle comments' }
 )
 vim.keymap.set('n', '<Plug>(phorge-review-submit)', '<Cmd>Phab submit<CR>', { desc = 'phorge-review: submit review' })
+vim.keymap.set('n', '<Plug>(phorge-review-next-file)', '<Cmd>Phab next-file<CR>', { desc = 'phorge-review: next file' })
+vim.keymap.set(
+  'n',
+  '<Plug>(phorge-review-prev-file)',
+  '<Cmd>Phab prev-file<CR>',
+  { desc = 'phorge-review: previous file' }
+)
+vim.keymap.set('n', '<Plug>(phorge-review-next-hunk)', '<Cmd>Phab next-hunk<CR>', { desc = 'phorge-review: next hunk' })
+vim.keymap.set(
+  'n',
+  '<Plug>(phorge-review-prev-hunk)',
+  '<Cmd>Phab prev-hunk<CR>',
+  { desc = 'phorge-review: previous hunk' }
+)
 vim.keymap.set('n', '<Plug>(phorge-review-files)', '<Cmd>Phab files<CR>', { desc = 'phorge-review: focus panel' })
 vim.keymap.set('n', '<Plug>(phorge-review-browse)', '<Cmd>Phab browse<CR>', { desc = 'phorge-review: open in browser' })
 require('phorge-review').apply_keymaps()
@@ -74,6 +88,7 @@ local function set_highlights()
     PhorgeReviewTitle = 'Title',
     PhorgeReviewSection = 'Special',
     PhorgeReviewDir = 'Directory',
+    PhorgeReviewCurrent = 'Visual',
   }
   for name, link in pairs(links) do
     vim.api.nvim_set_hl(0, name, { link = link, default = true })
