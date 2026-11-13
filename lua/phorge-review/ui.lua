@@ -671,7 +671,7 @@ function M.close()
   -- Cleared first so that the TabClosed autocommand does not close again.
   local tab = state.tabpage
   state.tabpage = nil
-  if tab and api.nvim_tabpage_is_valid(tab) then
+  if tab and vim.tbl_contains(api.nvim_list_tabpages(), tab) then
     if #api.nvim_list_tabpages() == 1 then
       vim.cmd('tabnew')
     end

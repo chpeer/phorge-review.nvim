@@ -88,7 +88,12 @@ vim.api.nvim_create_autocmd('TabClosed', {
   group = group,
   callback = function()
     local state = package.loaded['phorge-review.state']
-    if state and state.active() and state.tabpage and not vim.api.nvim_tabpage_is_valid(state.tabpage) then
+    if
+      state
+      and state.active()
+      and state.tabpage
+      and not vim.tbl_contains(vim.api.nvim_list_tabpages(), state.tabpage)
+    then
       require('phorge-review').close()
     end
   end,
