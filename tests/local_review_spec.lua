@@ -385,4 +385,29 @@ return {
       )
     end,
   },
+  {
+    'rebinds the file keys and current file when the main window jumps to another changed file',
+    function()
+      h.feature_repo()
+      vim.cmd('Phab local')
+      ui.open_file(state.file_set['a.txt'])
+      vim.cmd.edit('c.txt')
+      h.wait(function()
+        return state.current_file == 'c.txt'
+      end, 'the review to follow the jump')
+      local buf = vim.api.nvim_get_current_buf()
+      h.eq(
+        { current_file = 'c.txt', keys = { ']f', ']r' }, base_win = true },
+        {
+          current_file = state.current_file,
+          keys = vim.tbl_filter(function(lhs)
+            return vim.api.nvim_buf_call(buf, function()
+              return vim.fn.maparg(lhs, 'n') ~= ''
+            end)
+          end, { ']f', ']r' }),
+          base_win = state.base_win ~= nil,
+        }
+      )
+    end,
+  },
 }

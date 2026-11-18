@@ -82,10 +82,10 @@ Run `:help phorge-review` for the full documentation.
    right, in diff mode. The right-hand side is a normal buffer, so `gd`, references and
    hover all work. With `:Phab diff-only` the right-hand side is the real file when it
    has the revision's content, otherwise a read-only buffer without LSP. Use `zR` to
-   unfold unchanged code, `]f` / `[f` to step through the changed files and 
+   unfold unchanged code, `]f` / `[f` to step through the changed files and
    `]r` / `[r` to jump between comments, continuing in the next file with comments.
-   The base version follows the right-hand window: jump to another changed file 
-   (`gd`, `:e`, a picker) and its diff opens; jump to a file outside the review and the 
+   The base version follows the right-hand window: jump to another changed file
+   (`gd`, `:e`, a picker) and its diff opens; jump to a file outside the review and the
    base version closes until you come back (`<C-o>`).
 
 4. To comment, press `<leader>rc` on a line or a visual selection, write your comment and

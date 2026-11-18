@@ -756,6 +756,11 @@ local function follow_main_win()
         close_base()
         detach_file_keys()
         vim.cmd.diffoff()
+        if file then
+          state.current_file = file.path
+          mark_current_file()
+          attach_file_keys(buf)
+        end
         if base_content then
           show_diff(file, base_content)
         end
