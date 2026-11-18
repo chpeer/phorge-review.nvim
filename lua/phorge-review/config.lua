@@ -32,9 +32,13 @@ M.defaults = {
   },
   -- How many timeline entries to show in the panel.
   panel_timeline = 8,
-  -- Global keymaps bound to the <Plug>(phorge-review-*) mappings. Set a key to
-  -- false to skip it, or `keymaps = false` to define none.
+  -- Keymaps bound to the <Plug>(phorge-review-*) mappings. Set a key to false
+  -- to skip it, or `keymaps = false` to define none. `next_file`, `prev_file`,
+  -- `next` and `prev` are buffer-local to the panel and the open review files,
+  -- `next_hunk` and `prev_hunk` to the open review files; the others are global.
   keymaps = {
+    next_file = ']f',
+    prev_file = '[f',
     comment = '<leader>rc',
     submit = '<leader>rs',
     files = '<leader>rf',
@@ -42,6 +46,8 @@ M.defaults = {
     browse = '<leader>rb',
     next = ']r',
     prev = '[r',
+    next_hunk = ']c',
+    prev_hunk = '[c',
   },
 }
 

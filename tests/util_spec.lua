@@ -27,6 +27,12 @@ return {
     end,
   },
   {
+    'drops the leading whitespace of the first line',
+    function()
+      h.eq('- Comments', util.one_line('  \n   - Comments\n  - more', 40))
+    end,
+  },
+  {
     'merges single-child directories in the file tree',
     function()
       local tree = ui.file_tree({
@@ -46,6 +52,21 @@ return {
           },
         },
       }, shape(tree))
+    end,
+  },
+  {
+    'shows the current user as "you"',
+    function()
+      local user = vim.env.USER
+      vim.env.USER = 'alice'
+      local ok, err = pcall(function()
+        h.eq(
+          { 'you', 'bob', 'you' },
+          { util.display_author('alice'), util.display_author('bob'), util.display_author('you') == 'you' and 'you' }
+        )
+      end)
+      vim.env.USER = user
+      assert(ok, err)
     end,
   },
 }
